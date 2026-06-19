@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"golang.org/x/sys/windows"
+
 	"durablewindows/internal/engine"
 	"durablewindows/internal/logger"
 	"durablewindows/internal/storage"
@@ -65,9 +67,13 @@ func main() {
 	// Set process-wide DPI awareness early — before any window is created.
 	// Without this, GetWindowRect / SetWindowPlacement coordinates are
 	// virtualized by Windows on mixed-DPI multi-monitor systems.
+	//
+	// On pre-1607 Windows where the API doesn't exist in user32.dll, the
+	// LazyProc.Call panics (GetProcAddress returns NULL). We catch that
+	// panic and fall back to thread-level calls in the engine.
 	// Thread-level calls in engine.Start / batch functions cover goroutines
 	// that land on threads created before this point.
-	if !winapi.SetProcessDpiAwarenessContext(winapi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) {
+	if !setProcessDPIAware() {
 		logger.Error("", "SetProcessDpiAwarenessContext failed — per-monitor DPI may not be active at process level (thread-level calls will still apply)")
 	}
 
@@ -120,6 +126,23 @@ func fatal(format string, args ...interface{}) {
 	logger.Error("", format, args...)
 	os.Stdout.Sync()
 	os.Exit(1)
+}
+
+// setProcessDPIAware calls SetProcessDpiAwarenessContext with a recover to
+// gracefully handle pre-1607 Windows where the API doesn't exist in user32.dll.
+// On those systems LazyProc.Call panics because GetProcAddress returns NULL;
+// we catch that and fall back to thread-level DPI calls in the engine.
+func setProcessDPIAware() (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(*windows.DLLError); ok {
+				logger.Error("", "SetProcessDpiAwarenessContext unavailable: %v", r.(error))
+			} else {
+				panic(r) // unexpected panic — re-throw
+			}
+		}
+	}()
+	return winapi.SetProcessDpiAwarenessContext(winapi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
 }
 
 func parseFlags() {
