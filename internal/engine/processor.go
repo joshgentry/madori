@@ -728,8 +728,6 @@ func (p *Processor) onRestoreFinishedTimer() {
 			logger.AutoCapture("restore restarted", "for %s after %dms", displayKey, p.HaltRestore)
 			p.restoringFromMem = true
 			time.AfterFunc(time.Duration(p.HaltRestore)*time.Millisecond, func() {
-				p.mu.Lock()
-				defer p.mu.Unlock()
 				p.onRestoreTimer()
 			})
 			return
