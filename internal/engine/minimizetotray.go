@@ -1,6 +1,10 @@
 package engine
 
 import (
+	"sync"
+	"time"
+	"unsafe"
+
 	"durablewindows/internal/logger"
 	"durablewindows/internal/winapi"
 )
@@ -8,6 +12,56 @@ import (
 // minimizeToTrayWindows tracks windows that were parked to tray
 // (via Shift+minimize or crash-recovery restore).
 var minimizeToTrayWindows = make(map[uintptr]bool)
+
+// Shift-key tracking for Shift+minimize.  A WH_KEYBOARD_LL hook updates
+// these on every Shift key event so onMinimizeStart can see the state
+// even if the user released Shift before the out-of-context WinEvent fires.
+var (
+	shiftHeld        bool
+	lastShiftUp      time.Time
+	shiftGracePeriod = 300 * time.Millisecond
+	shiftStateMu     sync.Mutex
+	kbHookHandle     uintptr
+	kbHookRunning    bool // guard against duplicate install
+)
+
+// SetShiftGracePeriod sets how long after Shift is released that a minimize
+// is still treated as Shift+minimize (default 300 ms). Call before StartMinimizeToTray.
+func SetShiftGracePeriod(d time.Duration) {
+	shiftStateMu.Lock()
+	shiftGracePeriod = d
+	shiftStateMu.Unlock()
+}
+
+// isShiftDownOrRecent returns true if either Shift key is held right now,
+// or was released within the grace period (WinEvent latency compensation).
+func isShiftDownOrRecent() bool {
+	shiftStateMu.Lock()
+	defer shiftStateMu.Unlock()
+	if shiftHeld {
+		return true
+	}
+	return time.Since(lastShiftUp) < shiftGracePeriod
+}
+
+// keyboardHookProc is the WH_KEYBOARD_LL callback. It only tracks Shift key
+// state; all other keys are passed through immediately.
+func keyboardHookProc(nCode, wParam, lParam uintptr) uintptr {
+	if int32(nCode) >= winapi.HC_ACTION {
+		vkCode := (*winapi.KBDLLHOOKSTRUCT)(unsafe.Pointer(lParam)).VkCode
+		if vkCode == winapi.VK_LSHIFT || vkCode == winapi.VK_RSHIFT {
+			shiftStateMu.Lock()
+			if wParam == winapi.WM_KEYDOWN || wParam == winapi.WM_SYSKEYDOWN {
+				shiftHeld = true
+			} else {
+				shiftHeld = false
+				lastShiftUp = time.Now()
+			}
+			shiftStateMu.Unlock()
+		}
+	}
+	return winapi.CallNextHookEx(kbHookHandle, nCode, wParam, lParam)
+}
 
 // Tray icon tracking for parked windows.
 var (
@@ -39,15 +93,25 @@ func parkWindow(p *Processor, hwnd uintptr) {
 	winapi.PostMessage(p.trayHWnd, winapi.WM_APP_PARKED, uintptr(hwnd), 0)
 }
 
-// StartMinimizeToTray is a no-op — parking is now driven by
-// EVENT_SYSTEM_MINIMIZESTART in onMinimizeStart (processor.go).
-// Kept for API compatibility with tray.go.
+// StartMinimizeToTray installs the WH_KEYBOARD_LL hook that tracks Shift-key
+// state for Shift+minimize parking. Must be called from a thread with a
+// message pump (the tray app's main thread).
 func (p *Processor) StartMinimizeToTray() {
-	logger.Parking("shift-minimize-to-tray enabled", "")
+	if kbHookRunning {
+		return
+	}
+	kbHookHandle = winapi.SetWindowsHookExDirect(winapi.WH_KEYBOARD_LL, keyboardHookProc, 0, 0)
+	kbHookRunning = true
+	logger.Parking("shift-minimize-to-tray enabled", "WH_KEYBOARD_LL (handle=%d)", kbHookHandle)
 }
 
-// StopMinimizeToTray is a no-op.
+// StopMinimizeToTray removes the keyboard hook.
 func (p *Processor) StopMinimizeToTray() {
+	if kbHookHandle != 0 {
+		winapi.UnhookWindowsHookEx(kbHookHandle)
+		kbHookHandle = 0
+	}
+	kbHookRunning = false
 	logger.Parking("shift-minimize-to-tray disabled", "")
 }
 

@@ -73,6 +73,9 @@ var (
 	procSendMessageTimeoutW             = modUser32.NewProc("SendMessageTimeoutW")
 	procRegisterHotKey                  = modUser32.NewProc("RegisterHotKey")
 	procUnregisterHotKey                = modUser32.NewProc("UnregisterHotKey")
+	procSetWindowsHookExW               = modUser32.NewProc("SetWindowsHookExW")
+	procUnhookWindowsHookEx             = modUser32.NewProc("UnhookWindowsHookEx")
+	procCallNextHookEx                  = modUser32.NewProc("CallNextHookEx")
 	procDestroyIcon                     = modUser32.NewProc("DestroyIcon")
 	procGetDpiForWindow                 = modUser32.NewProc("GetDpiForWindow")
 	procIsValidDpiAwarenessContext      = modUser32.NewProc("IsValidDpiAwarenessContext")
@@ -138,6 +141,10 @@ type MonitorEnumDelegate func(
 	lprcMonitor *RECT,
 	dwData uintptr,
 ) uintptr
+
+// HookHandler is the callback type for SetWindowsHookEx (WH_KEYBOARD_LL, WH_MOUSE_LL, etc.).
+// All parameters are uintptr to match syscall.NewCallback requirements.
+type HookHandler func(nCode, wParam, lParam uintptr) uintptr
 
 // --- User32 Functions ---
 
@@ -519,6 +526,30 @@ func RegisterHotKey(hWnd uintptr, id int32, fsModifiers, vk uint32) bool {
 func UnregisterHotKey(hWnd uintptr, id int32) bool {
 	ret, _, _ := procUnregisterHotKey.Call(hWnd, uintptr(id))
 	return ret != 0
+}
+
+// SetWindowsHookExDirect installs a Windows hook with the callback passed
+// directly to syscall.NewCallback (no intermediate closure). For LL hooks
+// this avoids a layer of Go callback indirection that can interact poorly
+// with the message pump's nested dispatch.
+func SetWindowsHookExDirect(idHook int32, lpfn HookHandler, hMod uintptr, dwThreadID uint32) uintptr {
+	ret, _, _ := procSetWindowsHookExW.Call(
+		uintptr(idHook),
+		syscall.NewCallback(lpfn),
+		hMod,
+		uintptr(dwThreadID),
+	)
+	return ret
+}
+
+func UnhookWindowsHookEx(hhk uintptr) bool {
+	ret, _, _ := procUnhookWindowsHookEx.Call(hhk)
+	return ret != 0
+}
+
+func CallNextHookEx(hhk, nCode, wParam, lParam uintptr) uintptr {
+	ret, _, _ := procCallNextHookEx.Call(hhk, nCode, wParam, lParam)
+	return ret
 }
 
 func DestroyIcon(hIcon uintptr) bool {

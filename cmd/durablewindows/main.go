@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"time"
 
 	"durablewindows/internal/engine"
 	"durablewindows/internal/logger"
@@ -19,32 +20,33 @@ var (
 
 // CLI flags
 var (
-	silent               bool
-	logCategories        string
-	noLogCategories      string
-	delayAutoCapture     float64
-	delayAutoRestore     float64
-	ignoreProcess        string
-	careProcess          string
-	debugProcess         string
-	haltRestore          float64
-	fixZorder            int
-	showDesktop          bool
-	offscreenFix         bool
-	enhancedOffscreenFix bool
-	fixMinimizedRestore  bool
-	restoreSnapshot      int
-	captureSnapshot      int
-	restoreParkedWindows bool
-	portableMode         bool
-	redirectAppdata      string
-	promptSessionRestore bool
-	fixZorderSpecified   bool
-	disableNotifications bool
-	disableFastRestore   bool
-	disableWindowParking bool
-	dpiSensitiveCall     bool
-	redrawDesktop        bool
+	silent                bool
+	logCategories         string
+	noLogCategories       string
+	delayAutoCapture      float64
+	delayAutoRestore      float64
+	ignoreProcess         string
+	careProcess           string
+	debugProcess          string
+	haltRestore           float64
+	fixZorder             int
+	showDesktop           bool
+	offscreenFix          bool
+	enhancedOffscreenFix  bool
+	fixMinimizedRestore   bool
+	restoreSnapshot       int
+	captureSnapshot       int
+	restoreParkedWindows  bool
+	portableMode          bool
+	redirectAppdata       string
+	promptSessionRestore  bool
+	fixZorderSpecified    bool
+	disableNotifications  bool
+	disableFastRestore    bool
+	disableWindowParking  bool
+	windowParkingKeyGrace int
+	dpiSensitiveCall      bool
+	redrawDesktop         bool
 )
 
 func main() {
@@ -137,6 +139,7 @@ func parseFlags() {
 	flag.BoolVar(&dpiSensitiveCall, "dpi_sensitive_call", false, "Enable DPI-aware thread context switching")
 	flag.BoolVar(&redrawDesktop, "redraw_desktop", false, "Force desktop redraw after restore")
 	flag.BoolVar(&disableNotifications, "disable_notifications", false, "Disable notification balloons")
+	flag.IntVar(&windowParkingKeyGrace, "window_parking_key_grace", 300, "Grace period (ms) after Shift release for minimize-to-tray")
 	flag.BoolVar(&disableWindowParking, "disable_window_parking", false, "Disable Shift+minimize-to-tray entirely")
 
 	flag.Parse()
@@ -216,6 +219,7 @@ func applySettings(proc *engine.Processor) {
 	proc.EnhancedOffScreenFix = enhancedOffscreenFix
 	proc.FixMinimizedRestore = fixMinimizedRestore
 	proc.PromptSessionRestore = promptSessionRestore
+	engine.SetShiftGracePeriod(time.Duration(windowParkingKeyGrace) * time.Millisecond)
 	if disableWindowParking {
 		proc.EnableMinimizeToTray = false
 	}

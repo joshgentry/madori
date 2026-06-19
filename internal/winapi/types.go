@@ -89,3 +89,12 @@ type CWPRETSTRUCT struct {
 	Message uint32
 	HWnd    uintptr
 }
+
+// KBDLLHOOKSTRUCT represents the structure passed to WH_KEYBOARD_LL hook procs.
+type KBDLLHOOKSTRUCT struct {
+	VkCode      uint32
+	ScanCode    uint32
+	Flags       uint32
+	Time        uint32
+	DWExtraInfo uintptr
+}

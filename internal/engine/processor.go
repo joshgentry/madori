@@ -414,9 +414,13 @@ func (p *Processor) onMinimizeStart(evt WindowEvent) {
 	// Shift+minimize → park to tray.
 	// Let the minimize proceed normally (window shrinks to taskbar), then
 	// hide it underneath — the minimize animation covers the flicker.
+	//
+	// Shift state is tracked by a WH_KEYBOARD_LL hook (installed in
+	// StartMinimizeToTray) so we don't race with the out-of-context
+	// WinEvent dispatch.  A 300 ms grace period after Shift release
+	// handles the case where the user lifts Shift before the callback.
 	if p.EnableMinimizeToTray && evt.HWnd != 0 {
-		state := winapi.GetAsyncKeyState(winapi.VK_SHIFT)
-		if (uint16(state) & 0x8000) != 0 {
+		if isShiftDownOrRecent() {
 			style := winapi.GetWindowLong(evt.HWnd, winapi.GWL_STYLE)
 			if (style&winapi.WS_MINIMIZEBOX) == 0 || !winapi.IsWindowVisible(evt.HWnd) {
 				return
@@ -508,6 +512,17 @@ func (p *Processor) onWindowShow(evt WindowEvent) {
 	if !p.sessionActive {
 		return
 	}
+
+	// If this window was parked to tray and something else restored it
+	// (native app tray icon, Alt+Tab, etc.), clean up our parked state
+	// so our tray icon doesn't linger.
+	if minimizeToTrayWindows[evt.HWnd] {
+		delete(minimizeToTrayWindows, evt.HWnd)
+		persistParkedWindows()
+		p.removeParkedTrayIcon(evt.HWnd)
+		logger.Parking("externally restored", "%s — removed parked icon", p.WindowDesc(evt.HWnd))
+	}
+
 	// Still need the same filters — EVENT_OBJECT_SHOW also fires for menus,
 	// tooltips, and child controls becoming visible.
 	if !winapi.IsWindowVisible(evt.HWnd) || !winapi.IsTopLevelWindow(evt.HWnd) {

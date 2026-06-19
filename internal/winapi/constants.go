@@ -488,6 +488,12 @@ const (
 	DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED    = -5
 )
 
+// Hook types
+const (
+	WH_KEYBOARD_LL = 13
+	HC_ACTION      = 0
+)
+
 // Icon constants
 const (
 	ICON_SMALL  = 0
@@ -631,6 +637,8 @@ const (
 	VK_CLEAR      = 0x0C
 	VK_RETURN     = 0x0D
 	VK_SHIFT      = 0x10
+	VK_LSHIFT     = 0xA0
+	VK_RSHIFT     = 0xA1
 	VK_CONTROL    = 0x11
 	VK_MENU       = 0x12
 	VK_PAUSE      = 0x13
