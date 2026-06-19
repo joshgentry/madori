@@ -53,13 +53,6 @@ func (p *Processor) CaptureWindow(hwnd uintptr, eventType uint32, captureTime ti
 		return false
 	}
 
-	// Prime the minimize-button position cache if we don't already
-	// have one.  Moved/resized windows are invalidated elsewhere, so
-	// those will get a fresh probe on the next capture cycle.
-	if _, ok := minButtonCache[hwnd]; !ok {
-		RefreshMinButtonCache(hwnd)
-	}
-
 	metrics := p.captureWindowCore(hwnd, displayKey)
 	if metrics == nil {
 		return false
@@ -102,10 +95,6 @@ func (p *Processor) CaptureWindow(hwnd uintptr, eventType uint32, captureTime ti
 		p.monitorApplications[displayKey][hwnd] =
 			p.monitorApplications[displayKey][hwnd][len(p.monitorApplications[displayKey][hwnd])-MaxHistoryQueueLength:]
 	}
-	// Prime the minimize-button position cache so the hook has
-	// pixel-accurate hit-testing even on custom title bars.
-	RefreshMinButtonCache(hwnd)
-
 	return true
 }
 

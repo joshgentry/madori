@@ -14,33 +14,24 @@ when display configurations change (monitor connect/disconnect, RDP, sleep/resum
 
 All window positions are automatically persisted to disk on every capture cycle. Snapshots survive application restarts.
 
-### Right-Click Minimize to Tray
+### Shift+Minimize to Tray
 
-Right-click any window's **minimize button** to hide it to the system
-tray. A tray icon appears for the parked window — single-click or
-right-click the icon to restore the window.
+Hold **Shift** while minimizing any window to park it to the system
+tray. A tray icon appears for the parked window — click it to restore
+the window to its previous position.
 
 | Action | Result |
 | --- | --- |
-| Right-click minimize button | Hide window to tray (individual icon appears) |
+| Shift + minimize button | Park window to tray (individual icon appears) |
+| Shift + Win+Down | Same — park to tray |
 | Click parked window's tray icon | Restore that window to its previous position |
 | Tray menu → Restore all parked windows | Restore every parked window at once |
 
-Detection uses a `WH_MOUSE_LL` low-level mouse hook by default. If the
-hook causes input issues (rare), switch to polling:
-
-```
--window_parking_method poll
-```
-
-To disable the feature entirely:
+To disable the feature:
 
 ```
 -disable_window_parking
 ```
-
-When disabled, `-window_parking_method` has no effect and no mouse
-hook or polling loop is started.
 
 Parked windows are remembered across capture cycles and appear in the
 tray menu's Restore submenu.
@@ -62,8 +53,7 @@ tray menu's Restore submenu.
 | `-enhanced_offscreen_fix` | false | Use 4-corner off-screen detection instead of 2-corner |
 | `-fix_minimized_restore` | true | Handle the positioning of minimized window restores after a display change in place of Windows |
 | `-disable_fast_restore` | false | Use slower but more thorough 5-pass restore instead of 2-pass |
-| `-window_parking_method <method>` | hook | Right-click minimize detection method: `hook` (WH_MOUSE_LL, default) or `poll` |
-| `-disable_window_parking` | false | Disable minimize-to-tray entirely (no hook or polling) |
+| `-disable_window_parking` | false | Disable Shift+minimize-to-tray entirely |
 | `-redraw_desktop` | false | Force full desktop redraw after restore |
 | `-show_desktop_when_display_changes` | false | Minimize all windows before restoring |
 | `-disable_notifications` | false | Disable notification balloons during snapshots and auto-restore |
@@ -88,13 +78,12 @@ tray menu's Restore submenu.
 | Capture snapshot | Alt+C | Save positions under a key (0-9, a-z, A-Z, `` ` ``) |
 | Restore snapshot | Alt+R | Restore positions from a key (0-9, a-z, A-Z, `` ` ``) |
 | Pause auto restore | Alt+E | Temporarily disable automatic display-change restores |
-| Restore all parked windows | Alt+P | Restore all windows that were right-click minimized to the tray |
+| Restore all parked windows | Alt+P | Restore all windows that were Shift+minimized to the tray |
 | Exit | Alt+X | Quit the application |
 
-Parked windows are windows hidden to the system tray via right-click on
-their minimize button (see **Right-Click Minimize to Tray** above). Each
-parked window also gets its own individual tray icon — click it to restore
-that specific window.
+Parked windows are windows hidden to the system tray via Shift+minimize
+(see **Shift+Minimize to Tray** above). Each parked window also gets its
+own individual tray icon — click it to restore that specific window.
 
 ### Logging Categories
 
@@ -108,7 +97,7 @@ is enabled by default.
 | `snapshot_capture_restore` | Manual snapshot capture and restore, per-window restore log |
 | `window_events` | Window create/show/hide/kill, foreground change, move/resize, minimize |
 | `tray_interaction` | Startup sequence, tray clicks, timers, menu commands |
-| `window_parking` | Minimize-to-tray: hook/polling lifecycle, minimize button probing/caching, park/unpark, parked icon clicks |
+| `window_parking` | Minimize-to-tray: Shift+minimize interception, park/unpark, parked icon clicks |
 
 **Examples:**
 ```

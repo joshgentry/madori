@@ -256,9 +256,8 @@ func Tray(event, format string, args ...interface{}) {
 	logCategory(CatTray, event, format, args...)
 }
 
-// Parking logs window-parking (minimize-to-tray) messages: hook install/remove,
-// polling start/stop, minimize button probing/caching, park/unpark, parked
-// tray icon management.
+// Parking logs window-parking (minimize-to-tray) messages: Shift+minimize
+// interception, park/unpark, parked tray icon management.
 // Category: window_parking (default OFF).
 // Pass event="" to omit the event prefix.
 func Parking(event, format string, args ...interface{}) {

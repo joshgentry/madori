@@ -266,7 +266,6 @@ const (
 	WM_NCCREATE                    = 0x0081
 	WM_NCDESTROY                   = 0x0082
 	WM_NCCALCSIZE                  = 0x0083
-	WM_NCHITTEST                   = 0x0084
 	WM_NCPAINT                     = 0x0085
 	WM_NCACTIVATE                  = 0x0086
 	WM_GETDLGCODE                  = 0x0087
@@ -429,7 +428,6 @@ const (
 	WM_DWMWINDOWMAXIMIZEDCHANGE    = 0x0321
 	WM_DWMSENDICONICTHUMBNAIL      = 0x0323
 	WM_DWMSENDICONICREPRESENTATION = 0x0325
-	WM_GETTITLEBARINFOEX           = 0x033F
 	WM_HANDHELDFIRST               = 0x0358
 	WM_HANDHELDLAST                = 0x035F
 	WM_AFXFIRST                    = 0x0360
@@ -472,8 +470,7 @@ const (
 
 // Window field offsets for GetWindowLong (specific to Windows internals)
 const (
-	DWMWA_EXTENDED_FRAME_BOUNDS = 9 // RECT — visible bounds excluding DWM shadow
-	DWMWA_CLOAKED               = 14
+	DWMWA_CLOAKED = 14
 
 	// DWMWA_CLOAKED return values
 	DWM_NOT_CLOAKED       = 0
@@ -489,25 +486,6 @@ const (
 	DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE    = -3
 	DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 	DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED    = -5
-)
-
-// Mouse hook types
-const (
-	WH_MOUSE    = 7
-	WH_MOUSE_LL = 14
-)
-
-// Hook action codes
-const (
-	HC_ACTION = 0
-)
-
-// Non-client hit test results
-const (
-	HTMINBUTTON = 8
-	HTCAPTION   = 2
-	HTSYSMENU   = 3
-	HTCLOSE     = 20
 )
 
 // Icon constants

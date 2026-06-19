@@ -81,41 +81,6 @@ type MOUSEHOOKSTRUCT struct {
 	DWExtraInfo  uintptr
 }
 
-// TITLEBARINFO contains title bar information.
-// CCHILDREN_TITLEBAR = 5, so arrays have 6 elements.
-type TITLEBARINFO struct {
-	CbSize     uint32
-	RcTitleBar RECT
-	Rgstate    [6]uint32
-}
-
-// TITLEBARINFOEX extends TITLEBARINFO with per-button rectangles.
-type TITLEBARINFOEX struct {
-	CbSize     uint32
-	RcTitleBar RECT
-	Rgstate    [6]uint32
-	Rgrect     [6]RECT
-}
-
-// Title bar button indices into rgstate / rgrect.
-const (
-	TitleBarTitle    = 0
-	TitleBarReserved = 1
-	TitleBarMin      = 2
-	TitleBarMax      = 3
-	TitleBarHelp     = 4
-	TitleBarClose    = 5
-)
-
-// MSLLHOOKSTRUCT represents low-level mouse hook info (extended).
-type MSLLHOOKSTRUCT struct {
-	PT          POINT
-	MouseData   uint32
-	Flags       uint32
-	Time        uint32
-	DWExtraInfo uintptr
-}
-
 // CWPRETSTRUCT represents the structure passed to WH_CALLWNDPROCRET hook procs.
 type CWPRETSTRUCT struct {
 	LResult uintptr

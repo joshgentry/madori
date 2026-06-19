@@ -42,7 +42,6 @@ var (
 	fixZorderSpecified   bool
 	disableNotifications bool
 	disableFastRestore   bool
-	windowParkingMethod  string
 	disableWindowParking bool
 	dpiSensitiveCall     bool
 	redrawDesktop        bool
@@ -138,8 +137,7 @@ func parseFlags() {
 	flag.BoolVar(&dpiSensitiveCall, "dpi_sensitive_call", false, "Enable DPI-aware thread context switching")
 	flag.BoolVar(&redrawDesktop, "redraw_desktop", false, "Force desktop redraw after restore")
 	flag.BoolVar(&disableNotifications, "disable_notifications", false, "Disable notification balloons")
-	flag.StringVar(&windowParkingMethod, "window_parking_method", "hook", "Window parking method: hook (default) or poll")
-	flag.BoolVar(&disableWindowParking, "disable_window_parking", false, "Disable minimize-to-tray entirely")
+	flag.BoolVar(&disableWindowParking, "disable_window_parking", false, "Disable Shift+minimize-to-tray entirely")
 
 	flag.Parse()
 
@@ -218,7 +216,6 @@ func applySettings(proc *engine.Processor) {
 	proc.EnhancedOffScreenFix = enhancedOffscreenFix
 	proc.FixMinimizedRestore = fixMinimizedRestore
 	proc.PromptSessionRestore = promptSessionRestore
-	proc.UsePollParking = (windowParkingMethod == "poll")
 	if disableWindowParking {
 		proc.EnableMinimizeToTray = false
 	}

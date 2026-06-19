@@ -125,7 +125,6 @@ type Processor struct {
 	AutoRestoreLiveWindowsFromDb bool
 	enableDualPosSwitch          bool
 	EnableMinimizeToTray         bool
-	UsePollParking               bool    // use polling instead of WH_MOUSE_LL for park
 	trayHWnd                     uintptr // tray message window for parked icons
 	resolveHwndCollision         bool
 	rejectScaleFactorChange      bool
@@ -411,6 +410,24 @@ func (p *Processor) onMoveSizeEnd(evt WindowEvent) {
 
 func (p *Processor) onMinimizeStart(evt WindowEvent) {
 	logger.WindowEvent("minimize start", "%s", p.WindowDesc(evt.HWnd))
+
+	// Shift+minimize → park to tray.
+	// Let the minimize proceed normally (window shrinks to taskbar), then
+	// hide it underneath — the minimize animation covers the flicker.
+	if p.EnableMinimizeToTray && evt.HWnd != 0 {
+		state := winapi.GetAsyncKeyState(winapi.VK_SHIFT)
+		if (uint16(state) & 0x8000) != 0 {
+			style := winapi.GetWindowLong(evt.HWnd, winapi.GWL_STYLE)
+			if (style&winapi.WS_MINIMIZEBOX) == 0 || !winapi.IsWindowVisible(evt.HWnd) {
+				return
+			}
+			winapi.ShowWindowAsync(evt.HWnd, winapi.SW_HIDE)
+			minimizeToTrayWindows[evt.HWnd] = true
+			persistParkedWindows()
+			logger.Parking("shift-minimized to tray", "%s", p.WindowDesc(evt.HWnd))
+			winapi.PostMessage(p.trayHWnd, winapi.WM_APP_PARKED, uintptr(evt.HWnd), 0)
+		}
+	}
 }
 
 func (p *Processor) onMinimizeEnd(evt WindowEvent) {
@@ -446,8 +463,6 @@ func (p *Processor) onLocationChange(evt WindowEvent) {
 		return // position hasn't changed — ignore
 	}
 	p.lastCaptureRect[evt.HWnd] = rect
-
-	InvalidateMinButtonCache(evt.HWnd)
 
 	p.pendingMoveEvents = append(p.pendingMoveEvents, evt.HWnd)
 	if len(p.pendingMoveEvents) > 100 {
@@ -534,7 +549,6 @@ func (p *Processor) onWindowDestroy(evt WindowEvent) {
 	delete(p.windowTitle, evt.HWnd)
 	delete(p.windowTitleFast, evt.HWnd)
 	delete(p.windowProcessName, evt.HWnd)
-	InvalidateMinButtonCache(evt.HWnd)
 
 	// Only react to windows we actually track — don't reset the capture
 	// timer for every random system window that gets destroyed.
@@ -895,22 +909,6 @@ func (p *Processor) WindowDesc(hwnd uintptr) string {
 	}
 	if processName == "" {
 		processName = "???"
-	}
-	return FormatWindowDesc(processName, GetWindowTitle(hwnd), GetWindowClassName(hwnd))
-}
-
-// WindowDescLive returns a formatted window description using a live PID
-// lookup. Prefer p.WindowDesc() when a *Processor is available (it uses
-// the cached process name). Use this only in free functions or callbacks
-// where no Processor is in scope.
-func WindowDescLive(hwnd uintptr) string {
-	var pid uint32
-	_, pid = winapi.GetWindowThreadProcessId(hwnd)
-	processName := "???"
-	if pid != 0 {
-		if name := winapi.GetProcessName(pid); name != "" {
-			processName = name
-		}
 	}
 	return FormatWindowDesc(processName, GetWindowTitle(hwnd), GetWindowClassName(hwnd))
 }

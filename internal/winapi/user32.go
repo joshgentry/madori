@@ -73,9 +73,6 @@ var (
 	procSendMessageTimeoutW             = modUser32.NewProc("SendMessageTimeoutW")
 	procRegisterHotKey                  = modUser32.NewProc("RegisterHotKey")
 	procUnregisterHotKey                = modUser32.NewProc("UnregisterHotKey")
-	procSetWindowsHookExW               = modUser32.NewProc("SetWindowsHookExW")
-	procUnhookWindowsHookEx             = modUser32.NewProc("UnhookWindowsHookEx")
-	procCallNextHookEx                  = modUser32.NewProc("CallNextHookEx")
 	procDestroyIcon                     = modUser32.NewProc("DestroyIcon")
 	procGetDpiForWindow                 = modUser32.NewProc("GetDpiForWindow")
 	procIsValidDpiAwarenessContext      = modUser32.NewProc("IsValidDpiAwarenessContext")
@@ -106,7 +103,6 @@ var (
 	procEnableMenuItem                  = modUser32.NewProc("EnableMenuItem")
 	procGetSystemMetrics                = modUser32.NewProc("GetSystemMetrics")
 	procIsWindowOnCurrentVirtualDesktop = modUser32.NewProc("IsWindowOnCurrentVirtualDesktop")
-	procGetTitleBarInfo                 = modUser32.NewProc("GetTitleBarInfo")
 
 	// Kernel32 functions
 	procGetModuleHandleW           = modKernel32.NewProc("GetModuleHandleW")
@@ -142,10 +138,6 @@ type MonitorEnumDelegate func(
 	lprcMonitor *RECT,
 	dwData uintptr,
 ) uintptr
-
-// MouseHookHandler is the callback type for SetWindowsHookEx (WH_MOUSE / WH_MOUSE_LL).
-// All parameters are uintptr to match syscall.NewCallback requirements.
-type MouseHookHandler func(nCode, wParam, lParam uintptr) uintptr
 
 // --- User32 Functions ---
 
@@ -529,42 +521,6 @@ func UnregisterHotKey(hWnd uintptr, id int32) bool {
 	return ret != 0
 }
 
-func SetWindowsHookEx(idHook int32, lpfn MouseHookHandler, hMod uintptr, dwThreadID uint32) uintptr {
-	ret, _, _ := procSetWindowsHookExW.Call(
-		uintptr(idHook),
-		syscall.NewCallback(func(nCode, wParam, lParam uintptr) uintptr {
-			return lpfn(nCode, wParam, lParam)
-		}),
-		hMod,
-		uintptr(dwThreadID),
-	)
-	return ret
-}
-
-// SetWindowsHookExDirect installs a Windows hook with the callback passed
-// directly to syscall.NewCallback (no intermediate closure). For WH_MOUSE_LL
-// hooks this avoids a layer of Go callback indirection that can interact
-// poorly with the message pump's nested dispatch.
-func SetWindowsHookExDirect(idHook int32, lpfn MouseHookHandler, hMod uintptr, dwThreadID uint32) uintptr {
-	ret, _, _ := procSetWindowsHookExW.Call(
-		uintptr(idHook),
-		syscall.NewCallback(lpfn),
-		hMod,
-		uintptr(dwThreadID),
-	)
-	return ret
-}
-
-func UnhookWindowsHookEx(hhk uintptr) bool {
-	ret, _, _ := procUnhookWindowsHookEx.Call(hhk)
-	return ret != 0
-}
-
-func CallNextHookEx(hhk, nCode, wParam, lParam uintptr) uintptr {
-	ret, _, _ := procCallNextHookEx.Call(hhk, nCode, wParam, lParam)
-	return ret
-}
-
 func DestroyIcon(hIcon uintptr) bool {
 	ret, _, _ := procDestroyIcon.Call(hIcon)
 	return ret != 0
@@ -867,12 +823,6 @@ const (
 
 func IsWindowOnCurrentVirtualDesktop(hWnd uintptr) bool {
 	ret, _, _ := procIsWindowOnCurrentVirtualDesktop.Call(hWnd)
-	return ret != 0
-}
-
-func GetTitleBarInfo(hWnd uintptr, pti *TITLEBARINFO) bool {
-	pti.CbSize = uint32(unsafe.Sizeof(TITLEBARINFO{}))
-	ret, _, _ := procGetTitleBarInfo.Call(hWnd, uintptr(unsafe.Pointer(pti)))
 	return ret != 0
 }
 
