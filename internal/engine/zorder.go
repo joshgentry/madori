@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"time"
+
 	"durablewindows/internal/logger"
 	"durablewindows/internal/models"
 	"durablewindows/internal/storage"
@@ -135,9 +137,11 @@ func (p *Processor) PersistToDB() {
 	logger.AutoCapture("", "Auto-saving %d windows to database", total)
 	for dk, apps := range p.monitorApplications {
 		store.SaveWindowMetrics("live_"+dk, apps)
+		store.SaveDisplayKeyTimestamp(dk, time.Now())
 	}
 	for dk, dead := range p.deadApps {
 		store.SaveWindowMetrics("dead_"+dk, dead)
+		store.SaveDisplayKeyTimestamp(dk, time.Now())
 	}
 	store.SaveSnapshotTimes(p.snapshotTakenTime)
 }
@@ -170,6 +174,11 @@ func (p *Processor) LoadFromDB() {
 	if times, err := store.LoadSnapshotTimes(); err == nil && times != nil {
 		p.snapshotTakenTime = times
 	}
+	// Prune display-config buckets older than the most-recent N to cap DB growth.
+	// Kept display keys are determined by _display_key_meta timestamps (updated on
+	// every PersistToDB). Without this, every unique monitor layout ever seen
+	// (dock/undock, resolution changes) persists forever.
+	store.PruneDisplayKeys(25)
 }
 
 // ResetState clears temporary restore state.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -295,6 +296,93 @@ func (s *Store) SaveParkedWindows(hwnds []uintptr) error {
 		}
 		data, _ := json.Marshal(encoded)
 		return bucket.Put([]byte("entries"), data)
+	})
+}
+
+// SaveDisplayKeyTimestamp records the last-seen time for a display
+// configuration key. Display keys whose timestamp falls beyond the keep-N
+// window are eligible for pruning by PruneDisplayKeys.
+func (s *Store) SaveDisplayKeyTimestamp(displayKey string, t time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte("_display_key_meta"))
+		if err != nil {
+			return err
+		}
+		data, _ := t.MarshalBinary()
+		return bucket.Put([]byte(displayKey), data)
+	})
+}
+
+// PruneDisplayKeys deletes live_<dk> and dead_<dk> buckets for display keys
+// that are not among the most recent maxKeep (oldest LRU eviction).
+// _snapshot_times entries for pruned keys are also removed.
+func (s *Store) PruneDisplayKeys(maxKeep int) error {
+	if maxKeep <= 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type entry struct {
+		key string
+		ts  time.Time
+	}
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		meta := tx.Bucket([]byte("_display_key_meta"))
+		if meta == nil {
+			return nil // nothing to prune
+		}
+		var entries []entry
+		meta.ForEach(func(k, v []byte) error {
+			var t time.Time
+			if err := t.UnmarshalBinary(v); err == nil {
+				entries = append(entries, entry{string(k), t})
+			}
+			return nil
+		})
+		if len(entries) <= maxKeep {
+			return nil
+		}
+		// Sort oldest-first
+		sort.Slice(entries, func(i, j int) bool { return entries[i].ts.Before(entries[j].ts) })
+		toPrune := entries[:len(entries)-maxKeep]
+
+		for _, e := range toPrune {
+			// Delete live_ and dead_ buckets
+			tx.DeleteBucket([]byte("live_" + e.key))
+			tx.DeleteBucket([]byte("dead_" + e.key))
+			// Delete the meta entry itself
+			meta.Delete([]byte(e.key))
+		}
+
+		// Prune _snapshot_times entries for stale keys
+		snapBucket := tx.Bucket([]byte("_snapshot_times"))
+		if snapBucket != nil {
+			pruneSet := make(map[string]bool, len(toPrune))
+			for _, e := range toPrune {
+				pruneSet[e.key] = true
+			}
+			var snapToDelete [][]byte
+			snapBucket.ForEach(func(k, _ []byte) error {
+				key := string(k)
+				// key format is "<dk>_<id>"
+				if last := strings.LastIndexByte(key, '_'); last >= 0 {
+					dk := key[:last]
+					if pruneSet[dk] {
+						snapToDelete = append(snapToDelete, k)
+					}
+				}
+				return nil
+			})
+			for _, k := range snapToDelete {
+				snapBucket.Delete(k)
+			}
+		}
+
+		return nil
 	})
 }
 
