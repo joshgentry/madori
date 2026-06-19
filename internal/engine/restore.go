@@ -8,6 +8,15 @@ import (
 	"durablewindows/internal/winapi"
 )
 
+// restoreResult describes what restoreSingleWindow did (or didn't do).
+type restoreResult int
+
+const (
+	restoreRestored          restoreResult = iota // window position/size/placement was changed
+	restoreAlreadyPositioned                      // window already at target position — no work needed
+	restoreFiltered                               // window excluded from restore (dead, no-restore list, wrong desktop)
+)
+
 // BatchRestoreApplicationsOnCurrentDisplays performs multi-pass window restore.
 func (p *Processor) BatchRestoreApplicationsOnCurrentDisplays() {
 	if p.PauseAutoRestore {
@@ -83,12 +92,18 @@ func (p *Processor) RestoreApplicationsOnCurrentDisplays(displayKey string, targ
 			continue
 		}
 
-		p.restoreSingleWindow(hwnd, metrics)
+		result := p.restoreSingleWindow(hwnd, metrics)
 		p.restoredWindows[hwnd] = true
 		// Multi-pass restore runs up to 5 times; only log on the
 		// first pass to avoid confusing double-output.
 		if p.restoreTimes == 1 {
-			logger.Snapshot("window restored", "%s", p.WindowDesc(hwnd))
+			switch result {
+			case restoreRestored:
+				logger.Snapshot("window restored", "%s", p.WindowDesc(hwnd))
+			case restoreAlreadyPositioned:
+				logger.Snapshot("window restore skipped", "in correct position - %s", p.WindowDesc(hwnd))
+			}
+			// restoreFiltered: no log — window was excluded from restore
 		}
 	}
 }
@@ -119,17 +134,17 @@ func (p *Processor) findBestRestoreMetrics(hwnd uintptr, metricsList []*models.W
 	return metricsList[len(metricsList)-1]
 }
 
-func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetrics) {
+func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetrics) restoreResult {
 	if !winapi.IsWindow(hwnd) {
-		return
+		return restoreFiltered
 	}
 	if p.noRestoreWindows[hwnd] || p.noRestoreWindowsTmp[hwnd] {
-		return
+		return restoreFiltered
 	}
 	if IsMinimized(hwnd) {
 		// Skip windows on other virtual desktops
 		if p.vdManager != nil && !p.vdManager.IsWindowOnCurrentVirtualDesktop(hwnd) {
-			return
+			return restoreFiltered
 		}
 
 		// If the saved metrics show the window was NOT minimized when
@@ -140,7 +155,21 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 			metrics.WindowPlacement.ShowCmd != winapi.SW_MINIMIZE {
 			winapi.ShowWindow(hwnd, winapi.SW_RESTORE)
 		} else {
-			return // window was minimized when captured — leave it minimized
+			return restoreAlreadyPositioned // minimized when captured, still minimized — correct state
+		}
+	}
+
+	// Check if the window is already at the target position and size.
+	// When a redundant restore fires (e.g. back-to-back display-change
+	// events during monitor wake-up), the window may already be exactly
+	// where a prior restore left it — skip the expensive SetWindowPlacement
+	// and MoveWindow calls in that case. Topmost and off-screen fix are
+	// lightweight and defensive, so they still run.
+	var currentRect winapi.RECT
+	if winapi.GetWindowRect(hwnd, &currentRect) {
+		targetRect := metrics.ScreenPosition
+		if !metrics.IsMinimized && currentRect.Equals(targetRect) {
+			return restoreAlreadyPositioned
 		}
 	}
 
@@ -172,6 +201,11 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 		winapi.MoveWindow(hwnd, pos.Left, pos.Top, pos.Width(), pos.Height(), true)
 	}
 
+	// Restore DPI context
+	if dpiCtx != 0 {
+		winapi.SetThreadDpiAwarenessContext(int32(dpiCtx))
+	}
+
 	// Fix top-most state
 	if metrics.IsTopMost {
 		winapi.SetWindowPos(hwnd, ^uintptr(0), 0, 0, 0, 0,
@@ -179,11 +213,6 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 	} else if metrics.NeedClearTopMost {
 		winapi.SetWindowPos(hwnd, 1, 0, 0, 0, 0,
 			winapi.SWP_NOMOVE|winapi.SWP_NOSIZE|winapi.SWP_NOACTIVATE)
-	}
-
-	// Restore DPI context
-	if dpiCtx != 0 {
-		winapi.SetThreadDpiAwarenessContext(int32(dpiCtx))
 	}
 
 	// Fix off-screen windows
@@ -199,6 +228,8 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 		logMonitors()
 		p.FixOffScreenWindow(hwnd)
 	}
+
+	return restoreRestored
 }
 
 // FixOffScreenWindow moves a window that is off-screen back into view.

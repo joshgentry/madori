@@ -12,6 +12,8 @@ import (
 // TakeSnapshot records the current window positions as a named snapshot.
 // The snapshot ID is 0-9 (number keys), 10-35 (letter keys a-z), 36 (`) or 37 (undo).
 func (p *Processor) TakeSnapshot(id int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if id < 0 || id >= MaxSnapshots {
 		return false
 	}
@@ -76,8 +78,11 @@ func (p *Processor) TakeSnapshot(id int) bool {
 
 // RestoreSnapshot restores windows to their positions at the time of the snapshot.
 func (p *Processor) RestoreSnapshot(id int) {
-	// Save current position as undo
+	// Save current position as undo (TakeSnapshot handles its own locking)
 	p.TakeSnapshot(MaxSnapshots + 1)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	p.restoringSnapshot = true
 	p.snapshotId = id
