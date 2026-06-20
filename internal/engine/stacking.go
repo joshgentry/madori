@@ -55,54 +55,77 @@ func (p *Processor) RestoreStacking(displayKey string) {
 	// Sort by StackingRank ascending — topmost (rank 0) first.
 	sort.Slice(windows, func(i, j int) bool { return windows[i].rank < windows[j].rank })
 
+	// Prune dead HWNDs and check whether the stacking is already correct.
+	// Untracked system windows sit between our tracked windows in the
+	// z-order chain, so we can't compare HWND predecessors directly —
+	// instead walk the current chain and check relative ordering of
+	// tracked windows.
+	{
+		alive := windows[:0]
+		for _, w := range windows {
+			if winapi.IsWindow(w.hwnd) && winapi.IsWindowVisible(w.hwnd) {
+				alive = append(alive, w)
+			}
+		}
+		windows = alive
+	}
+	if len(windows) == 0 {
+		return
+	}
+
+	rankSet := make(map[uintptr]int, len(windows))
+	for _, w := range windows {
+		rankSet[w.hwnd] = w.rank
+	}
+
+	// Fast-path: walk the current z-order chain and check whether
+	// tracked windows already appear in monotonically increasing
+	// rank order. Windows on other desktops aren't in the chain
+	// and don't affect the check.
+	lastRank := -1
+	needRebuild := false
+	hwnd := winapi.GetTopWindow(0)
+	for hwnd != 0 {
+		if rank, ok := rankSet[hwnd]; ok {
+			if rank < lastRank {
+				needRebuild = true
+				break
+			}
+			lastRank = rank
+		}
+		hwnd = winapi.GetWindow(hwnd, winapi.GW_HWNDNEXT)
+	}
+	if !needRebuild {
+		logger.WindowEvent("stacking restore", "stacking correct for %d windows, no rebuild needed", len(windows))
+		return
+	}
+
 	logger.WindowEvent("stacking restore", "rebuilding stacking for %d windows (FixStacking=%d)", len(windows), p.FixStacking)
 	hDWP := winapi.BeginDeferWindowPos(int32(len(windows)))
 	if hDWP == 0 {
 		logger.Error("", "BeginDeferWindowPos failed for %d windows", len(windows))
 		return
 	}
-	placed := 0
-	var prevHWND uintptr // HWND of the window that should be directly above the next one
+	deferred := 0
+	var prevHWND uintptr
 	for _, w := range windows {
-		if !winapi.IsWindow(w.hwnd) || !winapi.IsWindowVisible(w.hwnd) {
-			logger.WindowEvent("stacking restore", "skipping %s: isWindow=%v isVisible=%v",
-				p.WindowDesc(w.hwnd), winapi.IsWindow(w.hwnd), winapi.IsWindowVisible(w.hwnd))
-			continue
-		}
-		hAfter := prevHWND // 0 = HWND_TOP for the first (topmost) window
-		if hAfter == 0 {
-			logger.WindowEvent("stacking restore", "deferring %s at HWND_TOP (rank=%d)", p.WindowDesc(w.hwnd), w.rank)
-		} else {
-			logger.WindowEvent("stacking restore", "deferring %s after 0x%x (rank=%d)", p.WindowDesc(w.hwnd), hAfter, w.rank)
-		}
 		prevDWP := hDWP
-		hDWP = winapi.DeferWindowPos(hDWP, w.hwnd, hAfter,
+		hDWP = winapi.DeferWindowPos(hDWP, w.hwnd, prevHWND,
 			0, 0, 0, 0,
 			winapi.SWP_NOMOVE|winapi.SWP_NOSIZE|winapi.SWP_NOACTIVATE)
 		if hDWP == 0 {
 			logger.Error("", "DeferWindowPos failed for %s", p.WindowDesc(w.hwnd))
 			winapi.EndDeferWindowPos(prevDWP)
-			for _, pw := range windows[:placed] {
-				if mList, ok := apps[pw.hwnd]; ok && len(mList) > 0 {
-					mList[len(mList)-1].NeedRestoreStacking = false
-				}
-			}
 			return
 		}
 		prevHWND = w.hwnd
-		placed++
+		deferred++
 	}
 	if !winapi.EndDeferWindowPos(hDWP) {
 		logger.Error("", "EndDeferWindowPos failed")
 		return
 	}
-	// Clear NeedRestoreStacking on all successfully-placed windows.
-	for _, w := range windows[:placed] {
-		if mList, ok := apps[w.hwnd]; ok && len(mList) > 0 {
-			mList[len(mList)-1].NeedRestoreStacking = false
-		}
-	}
-	logger.WindowEvent("stacking restore", "placed %d/%d windows", placed, len(windows))
+	logger.WindowEvent("stacking restore", "placed %d windows", deferred)
 }
 
 // CaptureStackingAll walks the full stacking chain from top to bottom and
