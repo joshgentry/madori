@@ -59,7 +59,7 @@ tray menu's Restore submenu.
 | `-disable_notifications` | false | Disable notification balloons during snapshots and auto-restore |
 | `-prompt_session_restore` | false | Ask before restoring windows when unlocking a session |
 | `-ignore_process <names>` | (none) | Semicolon-separated list of process names to exclude |
-| `-care_process <names>` | (none) | Semicolon-separated list of process names to include (whitelist) |
+| `-care_process <names>` | (none) | Semicolon-separated list of process names to track exclusively (all others are ignored) |
 
 ### One-shot Commands (no tray icon, exits after completion)
 

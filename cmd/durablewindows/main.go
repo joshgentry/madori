@@ -151,7 +151,7 @@ func parseFlags() {
 	flag.Float64Var(&delayAutoCapture, "delay_auto_capture", 0, "Auto capture delay in seconds")
 	flag.Float64Var(&delayAutoRestore, "delay_auto_restore", 0, "Auto restore delay in seconds")
 	flag.StringVar(&ignoreProcess, "ignore_process", "", "Process names to ignore (semicolon-separated)")
-	flag.StringVar(&careProcess, "care_process", "", "Process names to care about (whitelist)")
+	flag.StringVar(&careProcess, "care_process", "", "Only track these processes (exclusive; all others are ignored)")
 	flag.Float64Var(&haltRestore, "halt_restore", 3, "Seconds to wait before retrying restore")
 	flag.IntVar(&fixZorder, "fix_zorder", 1, "Z-order fix: 0=none, 1=snapshot only, 2=all")
 	flag.BoolVar(&showDesktop, "show_desktop_when_display_changes", false, "Show desktop on display change")
