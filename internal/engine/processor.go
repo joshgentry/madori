@@ -465,6 +465,13 @@ func (p *Processor) onMoveSizeEnd(evt WindowEvent) {
 func (p *Processor) onMinimizeStart(evt WindowEvent) {
 	logger.WindowEvent("minimize start", "%s", p.WindowDesc(evt.HWnd))
 
+	// Never park programmatic minimizes that happen during restore —
+	// they are re-minimizations to match the captured state, not
+	// user-initiated minimize actions.
+	if p.restoringFromMem {
+		return
+	}
+
 	// Shift+minimize → park to tray.
 	// Let the minimize proceed normally (window shrinks to taskbar), then
 	// hide it underneath — the minimize animation covers the flicker.
