@@ -194,11 +194,6 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 		wp := metrics.WindowPlacement
 		wp.Length = uint32(winapi.DefaultWINDOWPLACEMENT().Length)
 
-		// Don't restore to minimized state
-		if wp.ShowCmd == winapi.SW_SHOWMINIMIZED || wp.ShowCmd == winapi.SW_MINIMIZE {
-			wp.ShowCmd = winapi.SW_SHOWNORMAL
-		}
-
 		winapi.SetWindowPlacement(hwnd, &wp)
 	}
 
@@ -209,6 +204,13 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 	if !metrics.IsMinimized {
 		pos := metrics.ScreenPosition
 		winapi.MoveWindow(hwnd, pos.Left, pos.Top, pos.Width(), pos.Height(), true)
+	}
+
+	// If the window was minimized at capture time but is visible now,
+	// minimize it to match the captured state (mirrors the unminimize
+	// logic in the IsMinimized block above).
+	if metrics.IsMinimized && !IsMinimized(hwnd) {
+		winapi.ShowWindow(hwnd, winapi.SW_MINIMIZE)
 	}
 
 	// Fix top-most state

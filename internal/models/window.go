@@ -40,8 +40,9 @@ type WindowMetrics struct {
 	// Window z-order
 	IsTopMost         bool    `json:"is_top_most"`
 	NeedClearTopMost  bool    `json:"need_clear_top_most"`
-	PrevZorderWindow  uintptr `json:"prev_zorder_window"`
-	NeedRestoreZorder bool    `json:"need_restore_zorder"`
+	PrevZorderWindow  uintptr `json:"-"`            // transient, no longer used — replaced by ZOrderRank
+	NeedRestoreZorder bool    `json:"-"`            // transient — true when ZOrderRank is valid
+	ZOrderRank        int     `json:"z_order_rank"` // 0=topmost, -1=unset
 
 	// Snapshot bitfield (up to 64 snapshot IDs)
 	SnapShotFlags uint64 `json:"snapshot_flags"`

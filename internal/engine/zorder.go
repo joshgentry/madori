@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"sort"
 	"time"
 
 	"madori/internal/logger"
@@ -11,73 +12,148 @@ import (
 // RestoreZorder restores the z-order (window stacking) for all windows on the given display config.
 func (p *Processor) RestoreZorder(displayKey string) {
 	if p.FixZorder == 0 {
+		logger.WindowEvent("z-order restore", "skipped: FixZorder=0")
 		return
 	}
 	apps, ok := p.monitorApplications[displayKey]
 	if !ok || len(apps) == 0 {
 		return
 	}
-	count := 0
-	for _, metricsList := range apps {
-		if len(metricsList) == 0 {
-			continue
-		}
-		last := metricsList[len(metricsList)-1]
-		if p.FixZorder == 2 || last.NeedRestoreZorder {
-			count++
-		}
+
+	// Collect windows that need z-order restore, with their captured rank.
+	type entry struct {
+		hwnd uintptr
+		rank int
 	}
-	if count == 0 {
-		return
-	}
-	hDWP := winapi.BeginDeferWindowPos(int32(count))
-	if hDWP == 0 {
-		return
-	}
+	var windows []entry
 	for hwnd, metricsList := range apps {
 		if len(metricsList) == 0 {
 			continue
 		}
-		last := metricsList[len(metricsList)-1]
-		if p.FixZorder != 2 && !last.NeedRestoreZorder {
+		// During snapshot restore, find the metrics tagged with the snapshot
+		// ID — same logic as findBestRestoreMetrics. Otherwise use the last
+		// entry. This is critical: foreground changes trigger auto-captures
+		// that append entries without ZOrderRank, which would shadow the
+		// snapshot entry if we always used the last.
+		m := p.findZorderMetrics(metricsList)
+		// NeedRestoreZorder is a one-shot flag cleared after the first
+		// restore. During snapshot restore the snapshot bit on the entry
+		// is signal enough — don't gate on the consumed flag.
+		if m == nil {
 			continue
 		}
-		if !winapi.IsWindow(hwnd) || !winapi.IsWindowVisible(hwnd) {
+		if !p.restoringSnapshot && !m.NeedRestoreZorder && p.FixZorder != 2 {
 			continue
 		}
-		hWndInsertAfter := uintptr(1)
-		if last.PrevZorderWindow != 0 && winapi.IsWindow(last.PrevZorderWindow) {
-			hWndInsertAfter = last.PrevZorderWindow
+		windows = append(windows, entry{hwnd, m.ZOrderRank})
+	}
+	if len(windows) == 0 {
+		logger.WindowEvent("z-order restore", "skipped: no windows with NeedRestoreZorder (FixZorder=%d)", p.FixZorder)
+		return
+	}
+
+	// Sort by ZOrderRank ascending — topmost (rank 0) first.
+	sort.Slice(windows, func(i, j int) bool { return windows[i].rank < windows[j].rank })
+
+	logger.WindowEvent("z-order restore", "rebuilding z-order for %d windows (FixZorder=%d)", len(windows), p.FixZorder)
+	hDWP := winapi.BeginDeferWindowPos(int32(len(windows)))
+	if hDWP == 0 {
+		logger.Error("", "BeginDeferWindowPos failed for %d windows", len(windows))
+		return
+	}
+	placed := 0
+	var prevHWND uintptr // HWND of the window that should be directly above the next one
+	for _, w := range windows {
+		if !winapi.IsWindow(w.hwnd) || !winapi.IsWindowVisible(w.hwnd) {
+			logger.WindowEvent("z-order restore", "skipping %s: isWindow=%v isVisible=%v",
+				p.WindowDesc(w.hwnd), winapi.IsWindow(w.hwnd), winapi.IsWindowVisible(w.hwnd))
+			continue
 		}
-		var rect winapi.RECT
-		winapi.GetWindowRect(hwnd, &rect)
-		hDWP = winapi.DeferWindowPos(hDWP, hwnd, hWndInsertAfter,
-			rect.Left, rect.Top, rect.Width(), rect.Height(),
-			winapi.DWP_NOACTIVATE|winapi.DWP_NOOWNERZORDER)
+		hAfter := prevHWND // 0 = HWND_TOP for the first (topmost) window
+		if hAfter == 0 {
+			logger.WindowEvent("z-order restore", "deferring %s at HWND_TOP (rank=%d)", p.WindowDesc(w.hwnd), w.rank)
+		} else {
+			logger.WindowEvent("z-order restore", "deferring %s after 0x%x (rank=%d)", p.WindowDesc(w.hwnd), hAfter, w.rank)
+		}
+		prevDWP := hDWP
+		hDWP = winapi.DeferWindowPos(hDWP, w.hwnd, hAfter,
+			0, 0, 0, 0,
+			winapi.SWP_NOMOVE|winapi.SWP_NOSIZE|winapi.SWP_NOACTIVATE)
 		if hDWP == 0 {
+			logger.Error("", "DeferWindowPos failed for %s", p.WindowDesc(w.hwnd))
+			winapi.EndDeferWindowPos(prevDWP)
+			for _, pw := range windows[:placed] {
+				if mList, ok := apps[pw.hwnd]; ok && len(mList) > 0 {
+					mList[len(mList)-1].NeedRestoreZorder = false
+				}
+			}
 			return
 		}
-		last.NeedRestoreZorder = false
+		prevHWND = w.hwnd
+		placed++
 	}
-	winapi.EndDeferWindowPos(hDWP)
+	if !winapi.EndDeferWindowPos(hDWP) {
+		logger.Error("", "EndDeferWindowPos failed")
+		return
+	}
+	// Clear NeedRestoreZorder on all successfully-placed windows.
+	for _, w := range windows[:placed] {
+		if mList, ok := apps[w.hwnd]; ok && len(mList) > 0 {
+			mList[len(mList)-1].NeedRestoreZorder = false
+		}
+	}
+	logger.WindowEvent("z-order restore", "placed %d/%d windows", placed, len(windows))
 }
 
-// CaptureZorder records the z-order position of a window relative to its siblings.
-func (p *Processor) CaptureZorder(hwnd uintptr, displayKey string) {
+// CaptureZorderAll walks the full z-order chain from top to bottom and
+// assigns each tracked window a ZOrderRank (0 = topmost, 1 = next, …).
+// Call this once per snapshot to capture the absolute stacking position
+// of every window.
+func (p *Processor) CaptureZorderAll(displayKey string) {
 	apps, ok := p.monitorApplications[displayKey]
-	if !ok {
+	if !ok || len(apps) == 0 {
 		return
 	}
-	metricsList, ok := apps[hwnd]
-	if !ok || len(metricsList) == 0 {
-		return
+
+	// Walk the z-order chain from the topmost window down.
+	// GetTopWindow(0) = topmost; GetWindow(h, GW_HWNDNEXT) = next window below.
+	hwnd := winapi.GetTopWindow(0)
+	rank := 0
+	assigned := 0
+	for hwnd != 0 {
+		if mList, ok := apps[hwnd]; ok && len(mList) > 0 {
+			last := mList[len(mList)-1]
+			last.ZOrderRank = rank
+			last.NeedRestoreZorder = true
+			rank++
+			assigned++
+		}
+		hwnd = winapi.GetWindow(hwnd, winapi.GW_HWNDNEXT)
 	}
-	prevWindow := winapi.GetWindow(hwnd, winapi.GW_HWNDPREV)
-	if prevWindow != 0 && winapi.IsWindow(prevWindow) {
-		last := metricsList[len(metricsList)-1]
-		last.PrevZorderWindow = prevWindow
-		last.NeedRestoreZorder = true
+	logger.WindowEvent("z-order capture all", "assigned ranks 0-%d to %d tracked windows (displayKey=%s)", rank-1, assigned, displayKey)
+}
+
+// findZorderMetrics returns the metrics entry to use for z-order restore.
+// During snapshot restore it searches for the snapshot-tagged entry (same
+// logic as findBestRestoreMetrics); otherwise it returns the last entry.
+func (p *Processor) findZorderMetrics(metricsList []*models.WindowMetrics) *models.WindowMetrics {
+	if len(metricsList) == 0 {
+		return nil
 	}
+	if p.restoringSnapshot {
+		for i := len(metricsList) - 1; i >= 0; i-- {
+			if metricsList[i].HasSnapshotID(p.snapshotId) {
+				return metricsList[i]
+			}
+		}
+		// Fallback to any snapshot
+		for i := len(metricsList) - 1; i >= 0; i-- {
+			if metricsList[i].HasSnapshot() {
+				return metricsList[i]
+			}
+		}
+	}
+	return metricsList[len(metricsList)-1]
 }
 
 // --- Disk persistence ---
