@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"madori/internal/models"
 	bolt "go.etcd.io/bbolt"
+	"madori/internal/models"
 )
 
 // Store manages persistent storage using BoltDB.

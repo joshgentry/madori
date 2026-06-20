@@ -322,7 +322,9 @@ func (t *TrayApp) showNotificationBalloon(title, msg string) {
 	nid := winapi.NOTIFYICONDATA{
 		HWnd:             t.hwnd,
 		UID:              2, // separate UID — deleting it won't touch the main icon
-		UFlags:           winapi.NIF_INFO,
+		UFlags:           winapi.NIF_INFO | winapi.NIF_STATE,
+		DwState:          winapi.NIS_HIDDEN,
+		DwStateMask:      winapi.NIS_HIDDEN,
 		DwInfoFlags:      winapi.NIIF_INFO,
 		UCallbackMessage: winapi.WM_TRAYICON,
 	}
