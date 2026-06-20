@@ -10,14 +10,14 @@
           "0409": {
             "Comments": "",
             "CompanyName": "",
-            "FileDescription": "Durable Windows",
+            "FileDescription": "Madori",
             "FileVersion": "1.0.0",
-            "InternalName": "durablewindows",
+            "InternalName": "madori",
             "LegalCopyright": "",
             "LegalTrademarks": "",
-            "OriginalFilename": "durablewindows.exe",
+            "OriginalFilename": "madori.exe",
             "PrivateBuild": "",
-            "ProductName": "DurableWindows",
+            "ProductName": "Madori",
             "ProductVersion": "1.0.0",
             "SpecialBuild": ""
           }

@@ -8,10 +8,10 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"durablewindows/internal/logger"
-	"durablewindows/internal/models"
-	"durablewindows/internal/storage"
-	"durablewindows/internal/winapi"
+	"madori/internal/logger"
+	"madori/internal/models"
+	"madori/internal/storage"
+	"madori/internal/winapi"
 )
 
 // Constants

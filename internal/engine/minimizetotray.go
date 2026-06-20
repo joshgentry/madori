@@ -5,8 +5,8 @@ import (
 	"time"
 	"unsafe"
 
-	"durablewindows/internal/logger"
-	"durablewindows/internal/winapi"
+	"madori/internal/logger"
+	"madori/internal/winapi"
 )
 
 // minimizeToTrayWindows (moved to Processor struct — guarded by p.mu).

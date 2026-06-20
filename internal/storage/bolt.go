@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"durablewindows/internal/models"
+	"madori/internal/models"
 	bolt "go.etcd.io/bbolt"
 )
 

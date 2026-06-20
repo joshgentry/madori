@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"durablewindows/internal/engine"
-	"durablewindows/internal/logger"
-	"durablewindows/internal/winapi"
+	"madori/internal/engine"
+	"madori/internal/logger"
+	"madori/internal/winapi"
 )
 
 // TrayApp manages the system tray icon and the hidden message window.
@@ -47,7 +47,7 @@ type TrayApp struct {
 }
 
 // Window class name
-const windowClassName = "DurableWindowsMsgWindow"
+const windowClassName = "MadoriMsgWindow"
 
 // Timer IDs for the hidden window
 const (
@@ -209,7 +209,7 @@ func (t *TrayApp) Run() error {
 	hwnd := winapi.CreateWindowEx(
 		0,
 		className,
-		windows.StringToUTF16Ptr("DurableWindows"),
+		windows.StringToUTF16Ptr("Madori"),
 		0,
 		0, 0, 0, 0,
 		0, 0, hInstance,
@@ -283,7 +283,7 @@ func (t *TrayApp) addTrayIcon() {
 		UCallbackMessage: winapi.WM_TRAYICON,
 		HIcon:            t.idleIcon,
 	}
-	copy(nid.SzTip[:], windows.StringToUTF16("DurableWindows"))
+	copy(nid.SzTip[:], windows.StringToUTF16("Madori"))
 	winapi.ShellNotifyIcon(winapi.NIM_ADD, &nid)
 	t.notifyIcon = nid
 }
@@ -298,7 +298,7 @@ func (t *TrayApp) ShowRestoreTip() {
 	}
 	t.iconBusy = true
 	if t.notification {
-		t.showNotificationBalloon("DurableWindows", "Restoring window layout...")
+		t.showNotificationBalloon("Madori", "Restoring window layout...")
 	}
 	nid := t.notifyIcon
 	nid.HIcon = t.busyIcon
@@ -379,7 +379,7 @@ func (t *TrayApp) ShowSnapshotCaptureTip(id int) {
 	if t.silent || !t.notification {
 		return
 	}
-	t.showNotificationBalloon("DurableWindows", "Window layout snapshot "+snapshotName(id)+" captured...")
+	t.showNotificationBalloon("Madori", "Window layout snapshot "+snapshotName(id)+" captured...")
 }
 
 func (t *TrayApp) ShowSnapshotRestoreTip(id int) {
@@ -387,7 +387,7 @@ func (t *TrayApp) ShowSnapshotRestoreTip(id int) {
 		return
 	}
 	t.iconBusy = true
-	t.showNotificationBalloon("DurableWindows", "Window layout snapshot "+snapshotName(id)+" restored...")
+	t.showNotificationBalloon("Madori", "Window layout snapshot "+snapshotName(id)+" restored...")
 }
 
 func (t *TrayApp) EnableRestoreMenu(enableDB bool)       {}
@@ -611,7 +611,7 @@ func onSessionChange(reason uint32) {
 	case winapi.WTS_SESSION_UNLOCK:
 		if t.processor.PromptSessionRestore {
 			winapi.MessageBox(0, "Your session has been unlocked. Restore window layout?",
-				"DurableWindows", winapi.MB_OK|winapi.MB_ICONINFORMATION)
+				"Madori", winapi.MB_OK|winapi.MB_ICONINFORMATION)
 		}
 		t.processor.OnSessionUnlock()
 	}

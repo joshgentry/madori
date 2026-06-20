@@ -8,16 +8,16 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"durablewindows/internal/engine"
-	"durablewindows/internal/logger"
-	"durablewindows/internal/storage"
-	"durablewindows/internal/tray"
-	"durablewindows/internal/winapi"
+	"madori/internal/engine"
+	"madori/internal/logger"
+	"madori/internal/storage"
+	"madori/internal/tray"
+	"madori/internal/winapi"
 )
 
 var (
 	version     = "1.0.0"
-	productName = "DurableWindows"
+	productName = "Madori"
 )
 
 // CLI flags

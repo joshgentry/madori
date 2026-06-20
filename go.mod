@@ -1,8 +1,13 @@
-module durablewindows
+module madori
 
 go 1.25.0
 
 tool github.com/tc-hib/go-winres
+
+require (
+	go.etcd.io/bbolt v1.4.3
+	golang.org/x/sys v0.46.0
+)
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
@@ -12,7 +17,5 @@ require (
 	github.com/tc-hib/winres v0.2.1 // indirect
 	github.com/urfave/cli/v2 v2.25.7 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
-	go.etcd.io/bbolt v1.4.3 // indirect
 	golang.org/x/image v0.12.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
 )

@@ -3,9 +3,9 @@ package engine
 import (
 	"time"
 
-	"durablewindows/internal/logger"
-	"durablewindows/internal/models"
-	"durablewindows/internal/winapi"
+	"madori/internal/logger"
+	"madori/internal/models"
+	"madori/internal/winapi"
 )
 
 // restoreResult describes what restoreSingleWindow did (or didn't do).

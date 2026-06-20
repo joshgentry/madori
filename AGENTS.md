@@ -7,6 +7,6 @@
 - Delete the binary after verifying the build succeeded.
 - Example:
   ```
-  GOOS=windows GOARCH=amd64 go build -o build/durablewindows-test-build.exe ./cmd/durablewindows/ && rm build/durablewindows-test-build.exe && echo "Build OK"
+  GOOS=windows GOARCH=amd64 go build -o build/madori-test-build.exe ./cmd/madori/ && rm build/madori-test-build.exe && echo "Build OK"
   ```
   Confirm the output is `Build OK` with no errors.

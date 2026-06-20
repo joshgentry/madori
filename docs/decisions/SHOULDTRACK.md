@@ -2,7 +2,7 @@
 
 ## Architecture
 
-DurableWindows uses a two-tier filtering system for deciding which windows
+Madori uses a two-tier filtering system for deciding which windows
 to capture and restore.
 
 ### Tier 1: Event Handler Pre-checks (lightweight)

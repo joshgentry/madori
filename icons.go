@@ -1,4 +1,4 @@
-package durablewindows
+package madori
 
 import (
 	_ "embed"

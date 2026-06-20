@@ -1,5 +1,5 @@
 
-## DurableWindows Quick Help
+## Madori Quick Help
 
 A Windows system-tray utility that remembers window positions and restores them
 when display configurations change (monitor connect/disconnect, RDP, sleep/resume).
@@ -123,5 +123,5 @@ is enabled by default.
 
 | Location | Content |
 | --- | --- |
-| `%LocalAppData%\DurableWindows\` | Database and lock files |
+| `%LocalAppData%\Madori\` | Database and lock files |
 | `user_data\` (portable mode) | Database and lock files |

@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"durablewindows/internal/winapi"
+	"madori/internal/winapi"
 	"slices"
 )
 

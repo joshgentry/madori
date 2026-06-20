@@ -39,7 +39,7 @@ func (m *WinEventManager) AddHook(
 	return nil
 }
 
-// SetupStandardHooks registers all the standard WinEvent hooks used by DurableWindows.
+// SetupStandardHooks registers all the standard WinEvent hooks used by Madori.
 // The provided callback receives all window events for processing.
 func (m *WinEventManager) SetupStandardHooks(callback WinEventDelegate) {
 	// Foreground window changes

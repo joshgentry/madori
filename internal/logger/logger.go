@@ -99,7 +99,7 @@ func Init(serviceName string) error {
 	el, err = eventlog.Open(serviceName)
 	if err != nil {
 		// Fall back to file-based logging
-		f, ferr := os.OpenFile("durablewindows.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		f, ferr := os.OpenFile("madori.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if ferr == nil {
 			debugLog = log.New(f, "", 0)
 		}

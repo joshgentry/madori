@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"time"
 
-	"durablewindows/internal/logger"
-	"durablewindows/internal/winapi"
+	"madori/internal/logger"
+	"madori/internal/winapi"
 )
 
 // TakeSnapshot records the current window positions as a named snapshot.

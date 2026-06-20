@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"durablewindows/internal/winapi"
+	"madori/internal/winapi"
 )
 
 // WindowMetrics mirrors the C# ApplicationDisplayMetrics.

@@ -5,9 +5,9 @@ import (
 	"time"
 	"unsafe"
 
-	"durablewindows/internal/logger"
-	"durablewindows/internal/models"
-	"durablewindows/internal/winapi"
+	"madori/internal/logger"
+	"madori/internal/models"
+	"madori/internal/winapi"
 )
 
 // BatchCaptureApplicationsOnCurrentDisplays captures all windows on the current display config.

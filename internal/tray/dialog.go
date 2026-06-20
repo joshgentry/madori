@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"durablewindows/internal/winapi"
+	"madori/internal/winapi"
 )
 
 const (

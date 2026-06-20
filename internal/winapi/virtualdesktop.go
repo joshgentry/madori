@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"durablewindows/internal/logger"
+	"madori/internal/logger"
 )
 
 var (

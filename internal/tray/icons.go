@@ -1,18 +1,18 @@
 package tray
 
 import (
-	"durablewindows"
-	"durablewindows/internal/winapi"
+	"madori"
+	"madori/internal/winapi"
 )
 
 // loadIcons loads the embedded icon data and returns HICON handles for each state.
 func loadIcons() (idle, busy, update uintptr) {
-	idle = loadICO(durablewindows.IdleIcoData)
-	busy = loadPNGasIcon(durablewindows.BusyPngData)
+	idle = loadICO(madori.IdleIcoData)
+	busy = loadPNGasIcon(madori.BusyPngData)
 	if busy == 0 {
 		busy = idle
 	}
-	update = loadPNGasIcon(durablewindows.UpdatePngData)
+	update = loadPNGasIcon(madori.UpdatePngData)
 	if update == 0 {
 		update = idle
 	}

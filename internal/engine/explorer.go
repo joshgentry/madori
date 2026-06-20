@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"durablewindows/internal/winapi"
+	"madori/internal/winapi"
 )
 
 // GetExplorerFolderPath reads the address bar of an Explorer window to get

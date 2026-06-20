@@ -3,9 +3,9 @@ package engine
 import (
 	"time"
 
-	"durablewindows/internal/logger"
-	"durablewindows/internal/models"
-	"durablewindows/internal/winapi"
+	"madori/internal/logger"
+	"madori/internal/models"
+	"madori/internal/winapi"
 )
 
 // RestoreZorder restores the z-order (window stacking) for all windows on the given display config.

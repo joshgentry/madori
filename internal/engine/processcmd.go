@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"durablewindows/internal/logger"
+	"madori/internal/logger"
 )
 
 // CaptureProcessInfo runs PowerShell to capture command lines for all running
