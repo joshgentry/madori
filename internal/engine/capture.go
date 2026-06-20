@@ -45,7 +45,7 @@ func (p *Processor) CaptureWindowsOfInterest(displayKey string) {
 		}
 		hwnd = winapi.GetWindow(hwnd, winapi.GW_HWNDNEXT)
 	}
-	logger.AutoCapture("", "Capture cycle: %d windows scanned, %d changed", count, changed)
+	logger.AutoCapture(logger.LevelInfo, "", "Capture cycle: %d windows scanned, %d changed", count, changed)
 }
 
 // CaptureWindow captures the state of a single window. Returns true if the
@@ -87,7 +87,7 @@ func (p *Processor) CaptureWindow(hwnd uintptr, eventType uint32, captureTime ti
 			cloakedStr += fmt.Sprintf("%d", cloaked)
 		}
 	}
-	logger.WindowEvent("window captured", "%s%s %s pos=(%d,%d %dx%d)",
+	logger.WindowEvent(logger.LevelDebug, "window captured", "%s%s %s pos=(%d,%d %dx%d)",
 		FormatWindowDesc(metrics.ProcessName, metrics.Title, metrics.ClassName),
 		cloakedStr, minimized,
 		metrics.ScreenPosition.Left, metrics.ScreenPosition.Top,
@@ -204,7 +204,7 @@ func (p *Processor) shouldTrackWindow(hwnd uintptr) bool {
 	var cloaked uint32
 	if winapi.DwmGetWindowAttribute(hwnd, winapi.DWMWA_CLOAKED, unsafe.Pointer(&cloaked), 4) {
 		if cloaked == winapi.DWM_CLOAKED_APP || cloaked == winapi.DWM_CLOAKED_INHERITED {
-			logger.Filtered("window filtered", "%s cloaked (APP/INHERITED)", p.WindowDesc(hwnd))
+			logger.Filtered(logger.LevelDebug, "window filtered", "%s cloaked (APP/INHERITED)", p.WindowDesc(hwnd))
 			return false
 		}
 	}
@@ -261,7 +261,7 @@ func (p *Processor) shouldTrackWindow(hwnd uintptr) bool {
 			cloaked == winapi.DWM_CLOAKED_SHELL &&
 			p.vdManager != nil &&
 			p.vdManager.IsWindowOnCurrentVirtualDesktop(hwnd) {
-			logger.Filtered("window filtered", "%s uwp ghost (shell-cloaked on current desktop)", p.WindowDesc(hwnd))
+			logger.Filtered(logger.LevelDebug, "window filtered", "%s uwp ghost (shell-cloaked on current desktop)", p.WindowDesc(hwnd))
 			return false
 		}
 	}

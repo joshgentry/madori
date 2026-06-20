@@ -102,9 +102,9 @@ func (p *Processor) RestoreApplicationsOnCurrentDisplays(displayKey string, targ
 		if p.restoreTimes == 1 {
 			switch result {
 			case restoreRestored:
-				logger.Snapshot("window restored", "%s", p.WindowDesc(hwnd))
+				logger.Snapshot(logger.LevelInfo, "window restored", "%s", p.WindowDesc(hwnd))
 			case restoreAlreadyPositioned:
-				logger.Snapshot("window restore skipped", "in correct position - %s", p.WindowDesc(hwnd))
+				logger.Snapshot(logger.LevelDebug, "window restore skipped", "in correct position - %s", p.WindowDesc(hwnd))
 			}
 			// restoreFiltered: no log — window was excluded from restore
 		}
@@ -164,7 +164,7 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 			// Only log when there was actual work to do — the window
 			// was visible at capture but is now minimized elsewhere.
 			if !metrics.IsMinimized {
-				logger.Snapshot("vd-restore", "%s skipped: visible at snapshot, now minimized on other desktop — cannot restore across desktops",
+				logger.Snapshot(logger.LevelWarn, "vd-restore", "%s skipped: visible at snapshot, now minimized on other desktop — cannot restore across desktops",
 					p.WindowDesc(hwnd))
 			}
 			return restoreFiltered
@@ -235,7 +235,7 @@ func (p *Processor) restoreSingleWindow(hwnd uintptr, metrics *models.WindowMetr
 	if p.EnableOffScreenFix && p.isOffScreen(hwnd) {
 		var rect winapi.RECT
 		winapi.GetWindowRect(hwnd, &rect)
-		logger.Snapshot("off-screen fix", "%s rect=(%d,%d %dx%d) saved=(%d,%d %dx%d) minimized=%v",
+		logger.Snapshot(logger.LevelWarn, "off-screen fix", "%s rect=(%d,%d %dx%d) saved=(%d,%d %dx%d) minimized=%v",
 			p.WindowDesc(hwnd),
 			rect.Left, rect.Top, rect.Width(), rect.Height(),
 			metrics.ScreenPosition.Left, metrics.ScreenPosition.Top,
@@ -325,7 +325,7 @@ func (p *Processor) isRectOffScreen(rect winapi.RECT) bool {
 // logMonitors dumps the current display layout for off-screen diagnostics.
 func logMonitors() {
 	for i, d := range winapi.GetDisplays() {
-		logger.Snapshot("", "  monitor %d: (%d,%d %dx%d)",
+		logger.Snapshot(logger.LevelDebug, "", "  monitor %d: (%d,%d %dx%d)",
 			i, d.Position.Left, d.Position.Top, d.Position.Width(), d.Position.Height())
 	}
 }
@@ -371,7 +371,7 @@ func (p *Processor) ActivateWindow(hwnd uintptr) {
 	if !ok || len(metricsList) == 0 {
 		// Window not tracked — only attempt off-screen fix
 		if p.EnableOffScreenFix && p.isOffScreen(hwnd) {
-			logger.AutoCapture("off-screen fix", "%s (untracked)",
+			logger.AutoCapture(logger.LevelWarn, "off-screen fix", "%s (untracked)",
 				p.WindowDesc(hwnd))
 			p.FixOffScreenWindow(hwnd)
 		}
@@ -440,7 +440,7 @@ func (p *Processor) ActivateWindow(hwnd uintptr) {
 			return
 		}
 
-		logger.AutoCapture("unminimize restore", "%s \u2192 (%d,%d %dx%d)",
+		logger.AutoCapture(logger.LevelInfo, "unminimize restore", "%s \u2192 (%d,%d %dx%d)",
 			p.WindowDesc(hwnd),
 			targetRect.Left, targetRect.Top,
 			targetRect.Width(), targetRect.Height())
@@ -452,7 +452,7 @@ func (p *Processor) ActivateWindow(hwnd uintptr) {
 	// Fallback: if fixMinimizedRestore is disabled but off-screen
 	// fix is enabled, center the window if it's off-screen.
 	if p.EnableOffScreenFix && p.isOffScreen(hwnd) {
-		logger.AutoCapture("off-screen fix", "%s (fixMinimizedRestore disabled)",
+		logger.AutoCapture(logger.LevelWarn, "off-screen fix", "%s (fixMinimizedRestore disabled)",
 			p.WindowDesc(hwnd))
 		p.CenterWindow(hwnd)
 	}

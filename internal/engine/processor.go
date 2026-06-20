@@ -298,7 +298,7 @@ func (p *Processor) Start(autoRestoreFromDB, autoRestoreLastCapture bool) error 
 	p.curDisplayKey = winapi.GetDisplayKey()
 	p.prevDisplayKey = p.curDisplayKey
 	p.normalSessions[p.curDisplayKey] = true
-	logger.Event("", "Display config is %s", p.curDisplayKey)
+	logger.Event(logger.LevelInfo, "", "Display config is %s", p.curDisplayKey)
 
 	// Load persisted state from database
 	p.LoadFromDB()
@@ -334,7 +334,7 @@ func (p *Processor) Start(autoRestoreFromDB, autoRestoreLastCapture bool) error 
 	// WinEvents (which call startCaptureTimer → Stop) cannot reset it.
 	time.AfterFunc(time.Duration(CaptureLatency)*time.Millisecond, p.onCaptureTimer)
 
-	logger.Event("", "Startup complete, listening for window events")
+	logger.Event(logger.LevelInfo, "", "Startup complete, listening for window events")
 
 	return nil
 }
@@ -381,7 +381,7 @@ func (p *Processor) winEventCallback(hWinEventHook uintptr, eventType uint32, hw
 func (p *Processor) ProcessEvents() {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error("", "Event processing panic: %v", r)
+			logger.Error(logger.LevelError, "", "Event processing panic: %v", r)
 		}
 	}()
 	eventCount := 0
@@ -390,7 +390,7 @@ func (p *Processor) ProcessEvents() {
 		case evt := <-p.eventCh:
 			eventCount++
 			if eventCount%1000 == 1 {
-				logger.AutoCapture("events received", "%d events, last type=%d", eventCount, evt.EventType)
+				logger.AutoCapture(logger.LevelDebug, "events received", "%d events, last type=%d", eventCount, evt.EventType)
 			}
 			p.handleWinEvent(evt)
 		case <-p.quitCh:
@@ -447,23 +447,23 @@ func (p *Processor) onForegroundChange(evt WindowEvent) {
 	p.prevForeGroundWindow = p.foreGroundWindow
 	p.foreGroundWindow = evt.HWnd
 
-	logger.WindowEvent("foreground changed", "to %s", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "foreground changed", "to %s", p.WindowDesc(evt.HWnd))
 	p.startForegroundTimer()
 }
 
 func (p *Processor) onMoveSizeStart(evt WindowEvent) {
 	p.allUserMoveWindows[evt.HWnd] = true
-	logger.WindowEvent("move-size start", "%s", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "move-size start", "%s", p.WindowDesc(evt.HWnd))
 }
 
 func (p *Processor) onMoveSizeEnd(evt WindowEvent) {
 	p.userMove = true
-	logger.WindowEvent("move-size end", "%s", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "move-size end", "%s", p.WindowDesc(evt.HWnd))
 	p.resetCaptureTimer(UserMoveLatency)
 }
 
 func (p *Processor) onMinimizeStart(evt WindowEvent) {
-	logger.WindowEvent("minimize start", "%s", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "minimize start", "%s", p.WindowDesc(evt.HWnd))
 
 	// Never park programmatic minimizes that happen during restore —
 	// they are re-minimizations to match the captured state, not
@@ -489,7 +489,7 @@ func (p *Processor) onMinimizeStart(evt WindowEvent) {
 			winapi.ShowWindowAsync(evt.HWnd, winapi.SW_HIDE)
 			p.trayParkedWindows[evt.HWnd] = true
 			p.persistParkedWindows()
-			logger.Parking("shift-minimized to tray", "%s", p.WindowDesc(evt.HWnd))
+			logger.Parking(logger.LevelInfo, "shift-minimized to tray", "%s", p.WindowDesc(evt.HWnd))
 			winapi.PostMessage(p.trayHWnd, winapi.WM_APP_PARKED, uintptr(evt.HWnd), 0)
 		}
 	}
@@ -499,7 +499,7 @@ func (p *Processor) onMinimizeEnd(evt WindowEvent) {
 	p.lastUnminimizeTime = time.Now()
 	p.lastUnminimizeWindow = evt.HWnd
 	p.userMove = true
-	logger.WindowEvent("minimize end", "%s", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "minimize end", "%s", p.WindowDesc(evt.HWnd))
 	p.resetCaptureTimer(UserMoveLatency)
 
 	// Treat the unminimized window as foreground so the foreground
@@ -548,7 +548,7 @@ func (p *Processor) onWindowCreate(evt WindowEvent) {
 		// Log filtered-out windows to help debug cases like Chrome Ctrl+N
 		// where the window may be created hidden and only shown later.
 		if cls := GetWindowClassName(evt.HWnd); cls != "" || GetWindowTitle(evt.HWnd) != "" {
-			logger.Filtered("window create filtered", "%s visible=%v topLevel=%v",
+			logger.Filtered(logger.LevelDebug, "window create filtered", "%s visible=%v topLevel=%v",
 				p.WindowDesc(evt.HWnd), visible, topLevel)
 		}
 		return
@@ -556,11 +556,11 @@ func (p *Processor) onWindowCreate(evt WindowEvent) {
 	// Don't arm a capture timer for a full-screen window (game launch,
 	// browser full-screen video, etc.).
 	if p.isFullScreen(evt.HWnd) {
-		logger.AutoCapture("full-screen window created", "%s — skipping capture timer",
+		logger.AutoCapture(logger.LevelDebug, "full-screen window created", "%s — skipping capture timer",
 			p.WindowDesc(evt.HWnd))
 		return
 	}
-	logger.WindowEvent("window create", "%s starting capture timer", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "window create", "%s starting capture timer", p.WindowDesc(evt.HWnd))
 	p.startCaptureTimer(CaptureLatency / 2)
 }
 
@@ -581,7 +581,7 @@ func (p *Processor) onWindowShow(evt WindowEvent) {
 		delete(p.trayParkedWindows, evt.HWnd)
 		p.persistParkedWindows()
 		p.removeParkedTrayIcon(evt.HWnd)
-		logger.Parking("externally restored", "%s — removed parked icon", p.WindowDesc(evt.HWnd))
+		logger.Parking(logger.LevelDebug, "externally restored", "%s — removed parked icon", p.WindowDesc(evt.HWnd))
 	}
 
 	// Still need the same filters — EVENT_OBJECT_SHOW also fires for menus,
@@ -592,11 +592,11 @@ func (p *Processor) onWindowShow(evt WindowEvent) {
 	// Don't arm a capture timer for a full-screen window (game launch,
 	// browser full-screen video, etc.).
 	if p.isFullScreen(evt.HWnd) {
-		logger.AutoCapture("full-screen window shown", "%s — skipping capture timer",
+		logger.AutoCapture(logger.LevelDebug, "full-screen window shown", "%s — skipping capture timer",
 			p.WindowDesc(evt.HWnd))
 		return
 	}
-	logger.WindowEvent("window show", "%s starting capture timer", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "window show", "%s starting capture timer", p.WindowDesc(evt.HWnd))
 	p.startCaptureTimer(CaptureLatency / 2)
 }
 
@@ -612,7 +612,7 @@ func (p *Processor) onWindowHide(evt WindowEvent) {
 	if !p.isTrackedWindow(evt.HWnd) {
 		return
 	}
-	logger.WindowEvent("window hide", "%s moving to dead", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "window hide", "%s moving to dead", p.WindowDesc(evt.HWnd))
 	p.moveToDead(evt.HWnd)
 	p.startCaptureTimer(CaptureLatency)
 }
@@ -631,7 +631,7 @@ func (p *Processor) onWindowDestroy(evt WindowEvent) {
 	if !p.isTrackedWindow(evt.HWnd) {
 		return
 	}
-	logger.WindowEvent("window kill", "%s", p.WindowDesc(evt.HWnd))
+	logger.WindowEvent(logger.LevelDebug, "window kill", "%s", p.WindowDesc(evt.HWnd))
 	p.moveToDead(evt.HWnd)
 	p.startCaptureTimer(CaptureLatency)
 }
@@ -759,7 +759,7 @@ func (p *Processor) onForegroundTimer() {
 	// created invisible (e.g. Chrome Ctrl+N) and only became visible after
 	// the CREATE event fired, so onWindowCreate filtered them out.
 	if !tracked && winapi.IsWindowVisible(hwnd) && winapi.IsTopLevelWindow(hwnd) {
-		logger.WindowEvent("new foreground window", "%s starting capture", p.WindowDesc(hwnd))
+		logger.WindowEvent(logger.LevelDebug, "new foreground window", "%s starting capture", p.WindowDesc(hwnd))
 		p.startCaptureTimer(CaptureLatency / 2)
 	}
 
@@ -777,11 +777,11 @@ func (p *Processor) onCaptureTimer() {
 	// Suppress capture if the foreground window is now full-screen,
 	// even if it wasn't when the timer was started.
 	if p.isFullScreen(p.foreGroundWindow) {
-		logger.AutoCapture("full-screen foreground", "%s — skipping capture cycle",
+		logger.AutoCapture(logger.LevelDebug, "full-screen foreground", "%s — skipping capture cycle",
 			p.WindowDesc(p.foreGroundWindow))
 		return
 	}
-	logger.AutoCapture("", "Capture timer fired, running capture cycle")
+	logger.AutoCapture(logger.LevelDebug, "", "Capture timer fired, running capture cycle")
 	p.BatchCaptureApplicationsOnCurrentDisplays()
 	p.pendingMoveEvents = nil
 }
@@ -792,7 +792,7 @@ func (p *Processor) onRestoreTimer() {
 
 	p.restoreTimes = 0
 	p.restoredWindows = make(map[uintptr]bool)
-	logger.AutoCapture("restore started", "for %s", p.curDisplayKey)
+	logger.AutoCapture(logger.LevelInfo, "restore started", "for %s", p.curDisplayKey)
 	p.BatchRestoreApplicationsOnCurrentDisplays()
 }
 
@@ -812,10 +812,10 @@ func (p *Processor) onRestoreFinishedTimer() {
 	if p.restoreHalted || displayKey != p.curDisplayKey {
 		p.restoreHalted = false
 		p.lastDisplayChangeTime = time.Now()
-		logger.AutoCapture("restore aborted", "for %s", displayKey)
+		logger.AutoCapture(logger.LevelInfo, "restore aborted", "for %s", displayKey)
 		if p.HaltRestore > 0 {
 			p.curDisplayKey = displayKey
-			logger.AutoCapture("restore restarted", "for %s after %dms", displayKey, p.HaltRestore)
+			logger.AutoCapture(logger.LevelInfo, "restore restarted", "for %s after %dms", displayKey, p.HaltRestore)
 			p.restoringFromMem = true
 			time.AfterFunc(time.Duration(p.HaltRestore)*time.Millisecond, func() {
 				p.onRestoreTimer()
@@ -993,7 +993,7 @@ func (p *Processor) OnSessionLock() {
 	p.sessionLocked = true
 	p.sessionActive = false
 	p.EndDisplaySession()
-	logger.AutoCapture("session locked", "")
+	logger.AutoCapture(logger.LevelInfo, "session locked", "")
 }
 
 // OnSessionUnlock handles session unlock events.
@@ -1003,7 +1003,7 @@ func (p *Processor) OnSessionUnlock() {
 	p.sessionLocked = false
 	p.restoringFromMem = true
 	p.StartRestoreTimer()
-	logger.AutoCapture("session unlocked", "restoring windows")
+	logger.AutoCapture(logger.LevelInfo, "session unlocked", "restoring windows")
 }
 
 // OnPowerSuspend handles system suspend events.
@@ -1014,7 +1014,7 @@ func (p *Processor) OnPowerSuspend() {
 	if !p.sessionLocked {
 		p.EndDisplaySession()
 	}
-	logger.AutoCapture("system suspending", "")
+	logger.AutoCapture(logger.LevelInfo, "system suspending", "")
 }
 
 // NoteDisplayChange handles a display configuration change (monitor
@@ -1037,5 +1037,5 @@ func (p *Processor) OnPowerResume() {
 		p.restoringFromMem = true
 		p.StartRestoreTimer(SlowRestoreLatency)
 	}
-	logger.AutoCapture("system resuming", "")
+	logger.AutoCapture(logger.LevelInfo, "system resuming", "")
 }

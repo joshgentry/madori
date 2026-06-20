@@ -12,7 +12,38 @@ import (
 	"golang.org/x/sys/windows/svc/eventlog"
 )
 
-// Log levels
+// Level is a log severity level used as the first parameter of every
+// logging function. The -log_level CLI flag sets the minimum level;
+// messages below it are suppressed.
+type Level int
+
+const (
+	LevelTrace Level = iota // most verbose
+	LevelDebug
+	LevelInfo
+	LevelWarn
+	LevelError // least verbose
+)
+
+// levelChar maps a Level to its single-character prefix for the output format.
+var levelChar = map[Level]string{
+	LevelTrace: "T",
+	LevelDebug: "D",
+	LevelInfo:  "I",
+	LevelWarn:  "W",
+	LevelError: "E",
+}
+
+// levelColor maps a Level to its ANSI color for the prefix letter.
+var levelColor = map[Level]string{
+	LevelTrace: ColorMagenta, // purple
+	LevelDebug: ColorGray,    // gray
+	LevelInfo:  ColorGreen,   // green
+	LevelWarn:  ColorYellow,  // yellow
+	LevelError: ColorRed,     // red
+}
+
+// EventLog IDs
 const (
 	EventIDInfo  = 9990
 	EventIDError = 9999
@@ -73,6 +104,11 @@ var (
 	silent            bool
 	debugLog          *log.Logger
 	enabledCategories Category
+
+	// CurrentLevel is the minimum severity emitted. Messages with a
+	// lower level are filtered before formatting or I/O. Set directly
+	// after parsing the -log_level flag.
+	CurrentLevel Level = LevelTrace
 )
 
 // enableVirtualTerminal enables ANSI/VT escape code processing on the
@@ -164,128 +200,130 @@ func (c Category) enabled() bool {
 
 // logCategory formats and writes a message with a category label, an optional
 // event prefix, and color. All category-gated log functions funnel through this.
-func logCategory(cat Category, event, format string, args ...interface{}) {
+func logCategory(level Level, cat Category, event, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	disp := categoryDisplayMap[cat]
-	writeLog(disp.Name, disp.Color, EventIDInfo, event, msg)
+	writeLog(level, disp.Name, disp.Color, EventIDInfo, event, msg)
 }
 
 // Info logs an informational message (always visible, no category gate).
 // Pass event="" to omit the event prefix.
-func Info(event, format string, args ...interface{}) {
+func Info(level Level, event, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	writeLog("Info", ColorWhite, EventIDInfo, event, msg)
+	writeLog(level, "Info", ColorWhite, EventIDInfo, event, msg)
 }
 
 // Error logs an error message.
 // Pass event="" to omit the event prefix.
-func Error(event, format string, args ...interface{}) {
+func Error(level Level, event, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	writeLog("Error", ColorRed, EventIDError, event, msg)
+	writeLog(level, "Error", ColorRed, EventIDError, event, msg)
 }
 
 // Event logs a significant event (same as Info but semantically different).
 // Pass event="" to omit the event prefix.
-func Event(event, format string, args ...interface{}) {
+func Event(level Level, event, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	writeLog("Event", ColorWhite, EventIDInfo, event, msg)
+	writeLog(level, "Event", ColorWhite, EventIDInfo, event, msg)
 }
 
 // Trace logs a debug/trace message.
 // Pass event="" to omit the event prefix.
-func Trace(event, format string, args ...interface{}) {
-	if silent {
-		return
-	}
+func Trace(level Level, event, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	writeLog("Trace", ColorGray, EventIDInfo, event, msg)
+	writeLog(level, "Trace", ColorGray, EventIDInfo, event, msg)
 }
 
 // Filtered logs messages about windows that were examined but not tracked
 // (wrong class, cloaked, too small, overlay, ghost frame, etc).
 // Category: filtered_events (default OFF).
 // Pass event="" to omit the event prefix.
-func Filtered(event, format string, args ...interface{}) {
+func Filtered(level Level, event, format string, args ...interface{}) {
 	if !CatFiltered.enabled() {
 		return
 	}
-	logCategory(CatFiltered, event, format, args...)
+	logCategory(level, CatFiltered, event, format, args...)
 }
 
 // AutoCapture logs automatic capture/restore cycle messages: capture timer,
 // session lock/unlock, sleep/resume, auto-save, restore lifecycle.
 // Category: automatic_capture_restore (default OFF).
 // Pass event="" to omit the event prefix.
-func AutoCapture(event, format string, args ...interface{}) {
+func AutoCapture(level Level, event, format string, args ...interface{}) {
 	if !CatAutoCapture.enabled() {
 		return
 	}
-	logCategory(CatAutoCapture, event, format, args...)
+	logCategory(level, CatAutoCapture, event, format, args...)
 }
 
 // Snapshot logs user-initiated snapshot capture/restore, individual window
 // restores, off-screen fixes, minimize/restore-to-tray.
 // Category: snapshot_capture_restore (default ON).
 // Pass event="" to omit the event prefix.
-func Snapshot(event, format string, args ...interface{}) {
+func Snapshot(level Level, event, format string, args ...interface{}) {
 	if !CatSnapshot.enabled() {
 		return
 	}
-	logCategory(CatSnapshot, event, format, args...)
+	logCategory(level, CatSnapshot, event, format, args...)
 }
 
 // WindowEvent logs non-filtered window lifecycle events: create, show, hide,
 // kill, foreground change, move-size start/end, minimize start/end.
 // Category: window_events (default OFF).
 // Pass event="" to omit the event prefix.
-func WindowEvent(event, format string, args ...interface{}) {
+func WindowEvent(level Level, event, format string, args ...interface{}) {
 	if !CatWindowEvent.enabled() {
 		return
 	}
-	logCategory(CatWindowEvent, event, format, args...)
+	logCategory(level, CatWindowEvent, event, format, args...)
 }
 
 // Tray logs system-tray interaction messages: clicks, double-clicks, timers,
 // startup sequence (RegisterClassEx, CreateWindowEx, etc.).
 // Category: tray_interaction (default OFF).
 // Pass event="" to omit the event prefix.
-func Tray(event, format string, args ...interface{}) {
+func Tray(level Level, event, format string, args ...interface{}) {
 	if !CatTray.enabled() {
 		return
 	}
-	logCategory(CatTray, event, format, args...)
+	logCategory(level, CatTray, event, format, args...)
 }
 
 // Parking logs window-parking (minimize-to-tray) messages: Shift+minimize
 // interception, park/unpark, parked tray icon management.
 // Category: window_parking (default OFF).
 // Pass event="" to omit the event prefix.
-func Parking(event, format string, args ...interface{}) {
+func Parking(level Level, event, format string, args ...interface{}) {
 	if !CatParking.enabled() {
 		return
 	}
-	logCategory(CatParking, event, format, args...)
+	logCategory(level, CatParking, event, format, args...)
 }
 
 // writeLog is the single point through which all console and event-log output
 // flows. When event is non-empty it is formatted as "event --" and placed
 // between the category label and the message.
-func writeLog(categoryName, color string, eventID uint32, event, msg string) {
+func writeLog(level Level, categoryName, catColor string, eventID uint32, event, msg string) {
+	if level < CurrentLevel {
+		return
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Console / file output with timestamp and colored category label
+	// Console / file output: "L HH:MM:SS [Category] event : message"
 	ts := time.Now().Format("15:04:05")
+	lvlPrefix := fmt.Sprintf("%s%s%s", levelColor[level], levelChar[level], ColorReset)
 	var formatted string
 	if event != "" {
-		formatted = fmt.Sprintf("%s %s[%s]%s %s : %s",
-			ts, color, categoryName, ColorReset, event, msg)
+		formatted = fmt.Sprintf("%s %s %s[%s]%s %s : %s",
+			lvlPrefix, ts, catColor, categoryName, ColorReset, event, msg)
 		// Avoid trailing strangeness due to component formatting
 		formatted = strings.TrimSpace(formatted)
 		formatted = strings.TrimSuffix(formatted, " :")
 	} else {
-		formatted = fmt.Sprintf("%s %s[%s]%s %s",
-			ts, color, categoryName, ColorReset, msg)
+		formatted = fmt.Sprintf("%s %s %s[%s]%s %s",
+			lvlPrefix, ts, catColor, categoryName, ColorReset, msg)
 	}
 
 	if debugLog != nil {

@@ -62,7 +62,7 @@ func (p *Processor) CaptureProcessInfo() {
 		p.processCmd[currentPid] = currentCmdline
 	}
 
-	logger.AutoCapture("", "Captured %d process command lines", len(p.processCmd))
+	logger.AutoCapture(logger.LevelInfo, "", "Captured %d process command lines", len(p.processCmd))
 }
 
 func (p *Processor) captureProcessInfoWmic() {
@@ -89,5 +89,5 @@ func (p *Processor) captureProcessInfoWmic() {
 		p.processCmd[uint32(pid)] = fields[1]
 	}
 
-	logger.AutoCapture("", "Captured %d process command lines (wmic)", len(p.processCmd))
+	logger.AutoCapture(logger.LevelInfo, "", "Captured %d process command lines (wmic)", len(p.processCmd))
 }

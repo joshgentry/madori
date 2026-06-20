@@ -24,7 +24,7 @@ func (p *Processor) TakeSnapshot(id int) bool {
 		return false
 	}
 
-	logger.Snapshot("snapshot capture", "snapshot %d...", id)
+	logger.Snapshot(logger.LevelInfo, "snapshot capture", "snapshot %d...", id)
 
 	// Show notification before capture
 	if p.callbacks.ShowSnapshotCaptureTip != nil {
@@ -69,7 +69,7 @@ func (p *Processor) TakeSnapshot(id int) bool {
 	// Persist snapshot data to disk so it survives crashes
 	p.PersistToDB()
 
-	logger.Snapshot("snapshot captured", "%d", id)
+	logger.Snapshot(logger.LevelInfo, "snapshot captured", "%d", id)
 
 	// Enable restore snapshot menu
 	if p.callbacks.EnableRestoreSnapshotMenu != nil {
@@ -93,7 +93,7 @@ func (p *Processor) RestoreSnapshot(id int) {
 
 	p.restoreTimes = 0
 	p.restoredWindows = make(map[uintptr]bool)
-	logger.Snapshot("snapshot restore", "snapshot %d", id)
+	logger.Snapshot(logger.LevelInfo, "snapshot restore", "snapshot %d", id)
 	p.BatchRestoreApplicationsOnCurrentDisplays()
 }
 
@@ -109,7 +109,7 @@ func snapshotKey(id int) string {
 func (p *Processor) RestoreSnapshotCmd(id int) {
 	metrics, err := p.store.LoadWindowMetrics(snapshotKey(id))
 	if err != nil || len(metrics) == 0 {
-		logger.Error("", "Snapshot %d not found", id)
+		logger.Error(logger.LevelError, "", "Snapshot %d not found", id)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (p *Processor) RestoreSnapshotCmd(id int) {
 	p.restoringFromMem = true
 	p.restoreTimes = 0
 	p.restoredWindows = make(map[uintptr]bool)
-	logger.Snapshot("snapshot restore", "snapshot %d (%d windows)", id, len(metrics))
+	logger.Snapshot(logger.LevelInfo, "snapshot restore", "snapshot %d (%d windows)", id, len(metrics))
 	p.BatchRestoreApplicationsOnCurrentDisplays()
 }
 
@@ -132,6 +132,6 @@ func (p *Processor) CaptureSnapshotCmd(id int) {
 	p.CaptureWindowsOfInterest(p.curDisplayKey)
 
 	p.store.SaveWindowMetrics(snapshotKey(id), p.monitorApplications[p.curDisplayKey])
-	logger.Snapshot("snapshot captured", "snapshot %d (%d windows)", id,
+	logger.Snapshot(logger.LevelInfo, "snapshot captured", "snapshot %d (%d windows)", id,
 		len(p.monitorApplications[p.curDisplayKey]))
 }

@@ -88,7 +88,7 @@ func (p *Processor) StartTrayParking() {
 	}
 	globalShiftState.kbHookHandle = winapi.SetWindowsHookExDirect(winapi.WH_KEYBOARD_LL, keyboardHookProc, 0, 0)
 	globalShiftState.kbHookRunning = true
-	logger.Parking("tray parking enabled", "WH_KEYBOARD_LL (handle=%d)", globalShiftState.kbHookHandle)
+	logger.Parking(logger.LevelInfo, "tray parking enabled", "WH_KEYBOARD_LL (handle=%d)", globalShiftState.kbHookHandle)
 }
 
 // StopTrayParking removes the keyboard hook.
@@ -98,7 +98,7 @@ func (p *Processor) StopTrayParking() {
 		globalShiftState.kbHookHandle = 0
 	}
 	globalShiftState.kbHookRunning = false
-	logger.Parking("tray parking disabled", "")
+	logger.Parking(logger.LevelInfo, "tray parking disabled", "")
 }
 
 // SetTrayWindow stores the tray message window HWND so parked-window tray
@@ -142,7 +142,7 @@ func (p *Processor) AddParkedTrayIcon(hwnd uintptr) {
 	}
 	copy16(nid.SzTip[:], title)
 	winapi.ShellNotifyIcon(winapi.NIM_ADD, &nid)
-	logger.Parking("parked icon added", "%s (uid=%d)", title, uid)
+	logger.Parking(logger.LevelDebug, "parked icon added", "%s (uid=%d)", title, uid)
 }
 
 func (p *Processor) removeParkedTrayIcon(hwnd uintptr) {
@@ -182,7 +182,7 @@ func (p *Processor) RestoreParkedWindow(hwnd uintptr) {
 		p.restoreSingleWindow(hwnd, metricsList[len(metricsList)-1])
 	}
 
-	logger.Parking("unparked window", "%s", p.WindowDesc(hwnd))
+	logger.Parking(logger.LevelDebug, "unparked window", "%s", p.WindowDesc(hwnd))
 }
 
 // restoreOrphanedParkedWindows loads the parked-window list from BoltDB and
@@ -203,7 +203,7 @@ func (p *Processor) restoreOrphanedParkedWindows() {
 		// Populate the in-memory map so RestoreParkedWindow's guard passes.
 		// It will remove the entry and persist the updated list.
 		p.trayParkedWindows[hwnd] = true
-		logger.Parking("orphaned park restored", "%s (crash recovery)", p.WindowDesc(hwnd))
+		logger.Parking(logger.LevelInfo, "orphaned park restored", "%s (crash recovery)", p.WindowDesc(hwnd))
 		p.RestoreParkedWindow(hwnd)
 	}
 	// Clear the bucket now that we've restored everything.

@@ -48,6 +48,7 @@ tray menu's Restore submenu.
 | `-silent` | false | Silent mode (no balloon tips, no console output) |
 | `-log` | (snapshot only) | Log categories: `filtered_events`, `automatic_capture_restore`, `snapshot_capture_restore`, `window_events`, `tray_interaction`, `window_parking`. Comma-separated, e.g. `-log snapshot_capture_restore,tray_interaction` |
 | `-nolog` | (none) | Invert specific categories after `-log`. Applied second, so a category in both ends up disabled. Useful with `-log all`, e.g. `-log all -nolog filtered_events` |
+| `-log_level <level>` | info | Minimum severity: `trace`, `debug`, `info`, `warn`, `error`. Messages below this level are suppressed. Both `-log` categories and `-log_level` must pass for a message to appear. |
 | `-portable_mode` | false | Store data files under `user_data/` within the program folder |
 | `-redirect_appdata <path>` | (AppData) | Override the app data directory. Use `.` for current directory |
 | `-delay_auto_capture <seconds>` | 3.0 | Lag between window move event and automatic capture |

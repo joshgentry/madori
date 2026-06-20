@@ -23,6 +23,7 @@ var (
 // CLI flags
 var (
 	silent                     bool
+	logLevel                   string
 	logCategories              string
 	noLogCategories            string
 	delayAutoCapture           float64
@@ -60,9 +61,24 @@ func main() {
 	defer logger.Close()
 
 	logger.SetSilent(silent)
+
+	// Parse -log_level flag and set the minimum severity threshold.
+	switch logLevel {
+	case "trace":
+		logger.CurrentLevel = logger.LevelTrace
+	case "debug":
+		logger.CurrentLevel = logger.LevelDebug
+	case "info":
+		logger.CurrentLevel = logger.LevelInfo
+	case "warn":
+		logger.CurrentLevel = logger.LevelWarn
+	case "error":
+		logger.CurrentLevel = logger.LevelError
+	}
+
 	logger.SetCategories(logCategories)
 	logger.DisableCategories(noLogCategories)
-	logger.Event("", "%s %s starting", productName, version)
+	logger.Event(logger.LevelInfo, "", "%s %s starting", productName, version)
 
 	// Set process-wide DPI awareness early — before any window is created.
 	// Without this, GetWindowRect / SetWindowPlacement coordinates are
@@ -74,7 +90,7 @@ func main() {
 	// Thread-level calls in engine.Start / batch functions cover goroutines
 	// that land on threads created before this point.
 	if !setProcessDPIAware() {
-		logger.Error("", "SetProcessDpiAwarenessContext failed — per-monitor DPI may not be active at process level (thread-level calls will still apply)")
+		logger.Error(logger.LevelWarn, "", "SetProcessDpiAwarenessContext failed — per-monitor DPI may not be active at process level (thread-level calls will still apply)")
 	}
 
 	// Determine app data folder
@@ -84,13 +100,13 @@ func main() {
 	}
 
 	// Initialize storage (needed for both one-shot and GUI modes)
-	logger.Event("", "Opening database...")
+	logger.Event(logger.LevelInfo, "", "Opening database...")
 	store, err := storage.NewStore(appDataFolder, productName, version)
 	if err != nil {
 		fatal("Failed to open database: %v", err)
 	}
 	defer store.Close()
-	logger.Event("", "Database opened successfully")
+	logger.Event(logger.LevelInfo, "", "Database opened successfully")
 
 	// Create the core engine
 	proc := engine.New()
@@ -117,14 +133,14 @@ func main() {
 		fatal("Application error: %v", err)
 	}
 
-	logger.Event("", "Application exiting normally")
+	logger.Event(logger.LevelInfo, "", "Application exiting normally")
 }
 
 // fatal logs an error, flushes stdout, and exits with code 1.
 // os.Exit does not flush stdout, so without the Sync the error
 // message would be lost when the process terminates.
 func fatal(format string, args ...interface{}) {
-	logger.Error("", format, args...)
+	logger.Error(logger.LevelError, "", format, args...)
 	os.Stdout.Sync()
 	os.Exit(1)
 }
@@ -137,7 +153,7 @@ func setProcessDPIAware() (ok bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(*windows.DLLError); ok {
-				logger.Error("", "SetProcessDpiAwarenessContext unavailable: %v", r.(error))
+				logger.Error(logger.LevelWarn, "", "SetProcessDpiAwarenessContext unavailable: %v", r.(error))
 			} else {
 				panic(r) // unexpected panic — re-throw
 			}
@@ -150,6 +166,7 @@ func parseFlags() {
 	flag.BoolVar(&silent, "silent", false, "Silent mode (no balloon tips)")
 	flag.StringVar(&logCategories, "log", "", "Log categories: filtered_events,automatic_capture_restore,snapshot_capture_restore,window_events,tray_interaction,window_parking")
 	flag.StringVar(&noLogCategories, "nolog", "", "Invert specific log categories (applied after -log, e.g. \"-log all -nolog filtered_events\")")
+	flag.StringVar(&logLevel, "log_level", "info", "Minimum log level: trace, debug, info, warn, error")
 	flag.Float64Var(&delayAutoCapture, "delay_auto_capture", 0, "Auto capture delay in seconds")
 	flag.Float64Var(&delayAutoRestore, "delay_auto_restore", 0, "Auto restore delay in seconds")
 	flag.StringVar(&ignoreProcess, "ignore_process", "", "Process names to ignore (semicolon-separated)")

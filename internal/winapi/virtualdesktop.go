@@ -106,7 +106,7 @@ func (v *VirtualDesktopManager) callSafely(method uintptr, args ...uintptr) (hr 
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error("", "VirtualDesktopManager COM call panicked: %v", r)
+			logger.Error(logger.LevelError, "", "VirtualDesktopManager COM call panicked: %v", r)
 			hr = 1
 		}
 	}()
@@ -176,7 +176,7 @@ func GUIDFromString(s string) windows.GUID {
 		uintptr(unsafe.Pointer(&guid)),
 	)
 	if hr != 0 {
-		logger.Error("", "CLSIDFromString failed for %q: hr=0x%x", s, hr)
+		logger.Error(logger.LevelError, "", "CLSIDFromString failed for %q: hr=0x%x", s, hr)
 		return windows.GUID{}
 	}
 	return guid

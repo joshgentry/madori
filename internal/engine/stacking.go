@@ -12,7 +12,7 @@ import (
 // RestoreStacking restores the z-order (window stacking) for all windows on the given display config.
 func (p *Processor) RestoreStacking(displayKey string) {
 	if p.FixStacking == 0 {
-		logger.WindowEvent("stacking restore", "skipped: FixStacking=0")
+		logger.WindowEvent(logger.LevelDebug, "stacking restore", "skipped: FixStacking=0")
 		return
 	}
 	apps, ok := p.monitorApplications[displayKey]
@@ -48,7 +48,7 @@ func (p *Processor) RestoreStacking(displayKey string) {
 		windows = append(windows, entry{hwnd, m.StackingRank})
 	}
 	if len(windows) == 0 {
-		logger.WindowEvent("stacking restore", "skipped: no windows with NeedRestoreStacking (FixStacking=%d)", p.FixStacking)
+		logger.WindowEvent(logger.LevelDebug, "stacking restore", "skipped: no windows with NeedRestoreStacking (FixStacking=%d)", p.FixStacking)
 		return
 	}
 
@@ -96,14 +96,14 @@ func (p *Processor) RestoreStacking(displayKey string) {
 		hwnd = winapi.GetWindow(hwnd, winapi.GW_HWNDNEXT)
 	}
 	if !needRebuild {
-		logger.WindowEvent("stacking restore", "stacking correct for %d windows, no rebuild needed", len(windows))
+		logger.WindowEvent(logger.LevelDebug, "stacking restore", "stacking correct for %d windows, no rebuild needed", len(windows))
 		return
 	}
 
-	logger.WindowEvent("stacking restore", "rebuilding stacking for %d windows (FixStacking=%d)", len(windows), p.FixStacking)
+	logger.WindowEvent(logger.LevelInfo, "stacking restore", "rebuilding stacking for %d windows (FixStacking=%d)", len(windows), p.FixStacking)
 	hDWP := winapi.BeginDeferWindowPos(int32(len(windows)))
 	if hDWP == 0 {
-		logger.Error("", "BeginDeferWindowPos failed for %d windows", len(windows))
+		logger.Error(logger.LevelError, "", "BeginDeferWindowPos failed for %d windows", len(windows))
 		return
 	}
 	deferred := 0
@@ -114,7 +114,7 @@ func (p *Processor) RestoreStacking(displayKey string) {
 			0, 0, 0, 0,
 			winapi.SWP_NOMOVE|winapi.SWP_NOSIZE|winapi.SWP_NOACTIVATE)
 		if hDWP == 0 {
-			logger.Error("", "DeferWindowPos failed for %s", p.WindowDesc(w.hwnd))
+			logger.Error(logger.LevelError, "", "DeferWindowPos failed for %s", p.WindowDesc(w.hwnd))
 			winapi.EndDeferWindowPos(prevDWP)
 			return
 		}
@@ -122,10 +122,10 @@ func (p *Processor) RestoreStacking(displayKey string) {
 		deferred++
 	}
 	if !winapi.EndDeferWindowPos(hDWP) {
-		logger.Error("", "EndDeferWindowPos failed")
+		logger.Error(logger.LevelError, "", "EndDeferWindowPos failed")
 		return
 	}
-	logger.WindowEvent("stacking restore", "placed %d windows", deferred)
+	logger.WindowEvent(logger.LevelInfo, "stacking restore", "placed %d windows", deferred)
 }
 
 // CaptureStackingAll walks the full stacking chain from top to bottom and
@@ -153,7 +153,7 @@ func (p *Processor) CaptureStackingAll(displayKey string) {
 		}
 		hwnd = winapi.GetWindow(hwnd, winapi.GW_HWNDNEXT)
 	}
-	logger.WindowEvent("stacking capture all", "assigned ranks 0-%d to %d tracked windows (displayKey=%s)", rank-1, assigned, displayKey)
+	logger.WindowEvent(logger.LevelDebug, "stacking capture all", "assigned ranks 0-%d to %d tracked windows (displayKey=%s)", rank-1, assigned, displayKey)
 }
 
 // findStackingMetrics returns the metrics entry to use for stacking restore.
@@ -191,7 +191,7 @@ func (p *Processor) PersistToDB() {
 	for _, apps := range p.monitorApplications {
 		total += len(apps)
 	}
-	logger.AutoCapture("", "Auto-saving %d windows to database", total)
+	logger.AutoCapture(logger.LevelInfo, "", "Auto-saving %d windows to database", total)
 	for dk, apps := range p.monitorApplications {
 		p.store.SaveWindowMetrics("live_"+dk, apps)
 		p.store.SaveDisplayKeyTimestamp(dk, time.Now())

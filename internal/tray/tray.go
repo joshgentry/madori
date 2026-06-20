@@ -110,10 +110,10 @@ func startEngine() {
 func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case winapi.WM_APP_START:
-		logger.Tray("", "WM_APP_START received, starting engine...")
+		logger.Tray(logger.LevelInfo, "", "WM_APP_START received, starting engine...")
 		startEngine()
 		if t := globalTrayApp; t != nil {
-			logger.Parking("", "Starting minimize-to-tray...")
+			logger.Parking(logger.LevelInfo, "", "Starting minimize-to-tray...")
 			t.processor.StartTrayParking()
 		}
 		return 0
@@ -123,7 +123,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		}
 		return 0
 	case winapi.WM_APP_SHUTDOWN:
-		logger.Tray("", "WM_APP_SHUTDOWN received, initiating graceful shutdown...")
+		logger.Tray(logger.LevelInfo, "", "WM_APP_SHUTDOWN received, initiating graceful shutdown...")
 		if t := globalTrayApp; t != nil {
 			t.Quit()
 		}
@@ -147,7 +147,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		return 1
 	case winapi.WM_TIMER:
 		if wParam == TimerSingleClick {
-			logger.Tray("", "WM_TIMER(TimerSingleClick) fired — handleSingleClick")
+			logger.Tray(logger.LevelDebug, "", "WM_TIMER(TimerSingleClick) fired — handleSingleClick")
 			winapi.KillTimer(hwnd, TimerSingleClick)
 			handleSingleClick()
 		} else if wParam == TimerClearNotification {
@@ -198,14 +198,14 @@ func (t *TrayApp) Run() error {
 	wc.HInstance = hInstance
 	wc.LpszClassName = className
 
-	logger.Tray("", "RegisterClassEx %s...", windowClassName)
+	logger.Tray(logger.LevelInfo, "", "RegisterClassEx %s...", windowClassName)
 	if _, err := winapi.RegisterClassEx(&wc); err != nil {
-		logger.Error("", "RegisterClassEx failed: %v", err)
+		logger.Error(logger.LevelError, "", "RegisterClassEx failed: %v", err)
 		return err
 	}
-	logger.Tray("", "RegisterClassEx succeeded")
+	logger.Tray(logger.LevelInfo, "", "RegisterClassEx succeeded")
 
-	logger.Tray("", "CreateWindowEx...")
+	logger.Tray(logger.LevelInfo, "", "CreateWindowEx...")
 	hwnd := winapi.CreateWindowEx(
 		0,
 		className,
@@ -216,7 +216,7 @@ func (t *TrayApp) Run() error {
 		nil,
 	)
 	if hwnd == 0 {
-		logger.Error("", "CreateWindowEx failed: %v", syscall.GetLastError())
+		logger.Error(logger.LevelError, "", "CreateWindowEx failed: %v", syscall.GetLastError())
 		return syscall.GetLastError()
 	}
 	t.hwnd = hwnd
@@ -226,28 +226,28 @@ func (t *TrayApp) Run() error {
 	// shutdown (restore parked windows) instead of instant ExitProcess.
 	installConsoleCtrlHandler(hwnd)
 
-	logger.Tray("", "CreateWindowEx succeeded, hwnd=0x%x", hwnd)
+	logger.Tray(logger.LevelInfo, "", "CreateWindowEx succeeded, hwnd=0x%x", hwnd)
 
 	winapi.WTSRegisterSessionNotification(hwnd, 0)
 
 	// Load icons before adding tray icon
-	logger.Tray("", "Loading icons...")
+	logger.Tray(logger.LevelInfo, "", "Loading icons...")
 	t.initIcons()
-	logger.Tray("", "Icons loaded")
+	logger.Tray(logger.LevelInfo, "", "Icons loaded")
 
 	// Add tray icon
-	logger.Tray("", "Adding tray icon...")
+	logger.Tray(logger.LevelInfo, "", "Adding tray icon...")
 	t.addTrayIcon()
-	logger.Tray("", "Tray icon added")
+	logger.Tray(logger.LevelInfo, "", "Tray icon added")
 
 	// Defer engine start until the message pump is running.
 	// SetWinEventHook requires an active message loop on the calling thread.
 	// PostMessage queues the request; it dispatches once GetMessage runs.
-	logger.Tray("", "Posting WM_APP_START...")
+	logger.Tray(logger.LevelInfo, "", "Posting WM_APP_START...")
 	if !winapi.PostMessage(hwnd, winapi.WM_APP_START, 0, 0) {
-		logger.Error("", "PostMessage WM_APP_START failed")
+		logger.Error(logger.LevelError, "", "PostMessage WM_APP_START failed")
 	}
-	logger.Tray("", "Entering message pump...")
+	logger.Tray(logger.LevelInfo, "", "Entering message pump...")
 
 	// Message pump — blocks until WM_QUIT
 	var msg winapi.MSG
@@ -437,10 +437,10 @@ func installConsoleCtrlHandler(hwnd uintptr) {
 	ctrlCHwnd = hwnd
 	callback := syscall.NewCallback(consoleCtrlHandler)
 	if ok := winapi.SetConsoleCtrlHandler(callback, true); !ok {
-		logger.Tray("", "SetConsoleCtrlHandler failed (non-fatal, no console?)")
+		logger.Tray(logger.LevelDebug, "", "SetConsoleCtrlHandler failed (non-fatal, no console?)")
 		ctrlCHwnd = 0
 	} else {
-		logger.Tray("", "Console Ctrl+C handler installed (hwnd=0x%x)", hwnd)
+		logger.Tray(logger.LevelInfo, "", "Console Ctrl+C handler installed (hwnd=0x%x)", hwnd)
 	}
 }
 
@@ -460,14 +460,14 @@ func handleTrayMessage(wParam, lParam uintptr) uintptr {
 		mouseMsg := uint32(lParam & 0xFFFF)
 		if mouseMsg == winapi.WM_LBUTTONUP {
 			if hwnd := t.processor.FindParkedWindowByUID(uid); hwnd != 0 {
-				logger.Parking("parked icon clicked", "uid=%d, restoring window", uid)
+				logger.Parking(logger.LevelDebug, "parked icon clicked", "uid=%d, restoring window", uid)
 				t.processor.RestoreParkedWindow(hwnd)
 			}
 		} else if mouseMsg == winapi.WM_RBUTTONUP {
 			// Right-click on parked icon: show a simple "Restore" option.
 			// For now just restore immediately — same as left-click.
 			if hwnd := t.processor.FindParkedWindowByUID(uid); hwnd != 0 {
-				logger.Parking("parked icon right-clicked", "uid=%d, restoring window", uid)
+				logger.Parking(logger.LevelDebug, "parked icon right-clicked", "uid=%d, restoring window", uid)
 				t.processor.RestoreParkedWindow(hwnd)
 			}
 		}
@@ -492,11 +492,11 @@ func handleTrayMessage(wParam, lParam uintptr) uintptr {
 		// it was a drag or click-and-hold. Don't arm the timer.
 		held := time.Since(t.clickDownTime)
 		if held > 200*time.Millisecond {
-			logger.Tray("", "Tray WM_LBUTTONUP — held %dms, ignoring (drag/hold)", held.Milliseconds())
+			logger.Tray(logger.LevelDebug, "", "Tray WM_LBUTTONUP — held %dms, ignoring (drag/hold)", held.Milliseconds())
 			break
 		}
 		dct := winapi.GetDoubleClickTime()
-		logger.Tray("", "Tray WM_LBUTTONUP — held %dms, SetTimer(%dms)", held.Milliseconds(), dct)
+		logger.Tray(logger.LevelDebug, "", "Tray WM_LBUTTONUP — held %dms, SetTimer(%dms)", held.Milliseconds(), dct)
 		winapi.KillTimer(t.hwnd, TimerSingleClick)
 		t.singleClickPending = true
 		winapi.SetTimer(t.hwnd, TimerSingleClick, dct, 0)
@@ -504,7 +504,7 @@ func handleTrayMessage(wParam, lParam uintptr) uintptr {
 		t.suppressClick = true
 		t.singleClickPending = false
 		killed := winapi.KillTimer(t.hwnd, TimerSingleClick)
-		logger.Tray("", "Tray WM_LBUTTONDBLCLK — KillTimer=%v, calling TakeSnapshot", killed)
+		logger.Tray(logger.LevelDebug, "", "Tray WM_LBUTTONDBLCLK — KillTimer=%v, calling TakeSnapshot", killed)
 		t.onTrayDoubleClick()
 	}
 	return 0
@@ -555,14 +555,14 @@ func onMenuCommand(cmdID uint32) {
 	if t == nil {
 		return
 	}
-	logger.Tray("", "Menu command: %d", cmdID)
+	logger.Tray(logger.LevelDebug, "", "Menu command: %d", cmdID)
 	switch cmdID {
 	case CmdCaptureSnapshot:
 		name := EnterSnapshotName()
 		if name != 0 {
 			id := snapshotCharToID(name)
 			if id >= 0 {
-				logger.Snapshot("snapshot captured", "snapshot %d via menu", id)
+				logger.Snapshot(logger.LevelInfo, "snapshot captured", "snapshot %d via menu", id)
 				t.processor.TakeSnapshot(id)
 			}
 		}
@@ -571,15 +571,15 @@ func onMenuCommand(cmdID uint32) {
 		if name != 0 {
 			id := snapshotCharToID(name)
 			if id >= 0 {
-				logger.Snapshot("snapshot restored", "snapshot %d via menu", id)
+				logger.Snapshot(logger.LevelInfo, "snapshot restored", "snapshot %d via menu", id)
 				t.processor.RestoreSnapshot(id)
 			}
 		}
 	case CmdPauseResume:
 		t.processor.PauseAutoRestore = !t.processor.PauseAutoRestore
-		logger.AutoCapture("auto-restore toggled", "%s", map[bool]string{true: "paused", false: "resumed"}[t.processor.PauseAutoRestore])
+		logger.AutoCapture(logger.LevelInfo, "auto-restore toggled", "%s", map[bool]string{true: "paused", false: "resumed"}[t.processor.PauseAutoRestore])
 	case CmdRestoreAllParked:
-		logger.Parking("restored all parked", "via menu")
+		logger.Parking(logger.LevelInfo, "restored all parked", "via menu")
 		t.processor.RestoreAllParked()
 	case CmdExit:
 		t.Quit()
