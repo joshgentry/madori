@@ -131,4 +131,3 @@ func (p *Processor) CaptureSnapshotCmd(id int) {
 	logger.Snapshot("snapshot captured", "snapshot %d (%d windows)", id,
 		len(p.monitorApplications[p.curDisplayKey]))
 }
-

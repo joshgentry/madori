@@ -73,4 +73,3 @@ func (m *WindowMetrics) HasSnapshotID(id int) bool {
 func (m *WindowMetrics) SetSnapshotID(id int) {
 	m.SnapShotFlags |= (1 << uint(id))
 }
-

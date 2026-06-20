@@ -57,6 +57,7 @@ tray menu's Restore submenu.
 | `-redraw_desktop` | false | Force full desktop redraw after restore |
 | `-show_desktop_when_display_changes` | false | Minimize all windows before restoring |
 | `-disable_notifications` | false | Disable notification balloons during snapshots and auto-restore |
+| `-notification_linger_duration <ms>` | 3000 | How long notification balloons remain visible (milliseconds) |
 | `-prompt_session_restore` | false | Ask before restoring windows when unlocking a session |
 | `-ignore_process <names>` | (none) | Semicolon-separated list of process names to exclude |
 | `-care_process <names>` | (none) | Semicolon-separated list of process names to track exclusively (all others are ignored) |

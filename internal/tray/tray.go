@@ -24,10 +24,12 @@ type TrayApp struct {
 	processor *engine.Processor
 
 	// State
-	running      bool
-	iconBusy     bool
-	silent       bool
-	notification bool
+	running              bool
+	iconBusy             bool
+	silent               bool
+	notification         bool
+	notificationLingerMs int
+	notificationShowing  bool // true while a notification balloon is visible
 
 	// singleClickPending: a timer is armed; will fire restore on expiry.
 	singleClickPending bool
@@ -75,6 +77,15 @@ func NewTrayApp(proc *engine.Processor) *TrayApp {
 func (t *TrayApp) SetSilent(s bool) { t.silent = s }
 
 func (t *TrayApp) SetNotification(n bool) { t.notification = n }
+
+// SetNotificationLinger sets how long notification balloons remain visible (ms).
+// Default 3000. Call before Run().
+func (t *TrayApp) SetNotificationLinger(durationMs int) {
+	if durationMs < 500 {
+		durationMs = 500
+	}
+	t.notificationLingerMs = durationMs
+}
 
 // startEngine defers processor initialization until the message pump is active.
 // SetWinEventHook requires an active message loop on the calling thread.
@@ -142,7 +153,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		} else if wParam == TimerClearNotification {
 			winapi.KillTimer(hwnd, TimerClearNotification)
 			if t := globalTrayApp; t != nil {
-				t.clearNotificationBalloon()
+				t.dismissNotificationBalloon()
 			}
 		}
 		return 0
@@ -287,13 +298,7 @@ func (t *TrayApp) ShowRestoreTip() {
 	}
 	t.iconBusy = true
 	if t.notification {
-		nid := t.notifyIcon
-		nid.UFlags = winapi.NIF_INFO
-		nid.DwInfoFlags = winapi.NIIF_INFO
-		copy(nid.SzInfo[:], windows.StringToUTF16("Restoring window layout..."))
-		copy(nid.SzInfoTitle[:], windows.StringToUTF16("DurableWindows"))
-		winapi.ShellNotifyIcon(winapi.NIM_MODIFY, &nid)
-		t.startNotificationTimer(3000)
+		t.showNotificationBalloon("DurableWindows", "Restoring window layout...")
 	}
 	nid := t.notifyIcon
 	nid.HIcon = t.busyIcon
@@ -309,22 +314,49 @@ func (t *TrayApp) HideRestoreTip(showIcon bool) {
 	winapi.ShellNotifyIcon(winapi.NIM_MODIFY, &nid)
 }
 
-// clearNotificationBalloon dismisses the notification balloon by sending
-// an NIM_MODIFY with an empty SzInfo. Windows clears the balloon immediately.
-func (t *TrayApp) clearNotificationBalloon() {
-	nid := t.notifyIcon
-	nid.UFlags = winapi.NIF_INFO
-	nid.DwInfoFlags = winapi.NIIF_NONE
-	nid.SzInfo = [256]uint16{}
-	nid.SzInfoTitle = [64]uint16{}
-	winapi.ShellNotifyIcon(winapi.NIM_MODIFY, &nid)
+// showNotificationBalloon shows a notification balloon using a separate
+// invisible tray icon (UID 2). This way NIM_DELETE can dismiss the balloon
+// without removing the main tray icon.
+func (t *TrayApp) showNotificationBalloon(title, msg string) {
+	t.dismissNotificationBalloon() // dismiss any existing balloon first
+	nid := winapi.NOTIFYICONDATA{
+		HWnd:             t.hwnd,
+		UID:              2, // separate UID — deleting it won't touch the main icon
+		UFlags:           winapi.NIF_INFO,
+		DwInfoFlags:      winapi.NIIF_INFO,
+		UCallbackMessage: winapi.WM_TRAYICON,
+	}
+	copy(nid.SzInfo[:], windows.StringToUTF16(msg))
+	copy(nid.SzInfoTitle[:], windows.StringToUTF16(title))
+	winapi.ShellNotifyIcon(winapi.NIM_ADD, &nid)
+	t.notificationShowing = true
+	t.startNotificationTimer()
 }
 
-// startNotificationTimer arms a one-shot timer that clears the balloon after
-// the given duration. Call this after showing a notification balloon.
-func (t *TrayApp) startNotificationTimer(durationMs int) {
+// dismissNotificationBalloon removes the notification balloon by deleting
+// the UID-2 tray icon. Safe — only the balloon icon is removed; the main
+// UID-1 tray icon is untouched.
+func (t *TrayApp) dismissNotificationBalloon() {
+	if !t.notificationShowing {
+		return
+	}
+	nid := winapi.NOTIFYICONDATA{
+		HWnd: t.hwnd,
+		UID:  2,
+	}
+	winapi.ShellNotifyIcon(winapi.NIM_DELETE, &nid)
+	t.notificationShowing = false
+}
+
+// startNotificationTimer arms a one-shot timer that dismisses the balloon
+// after notificationLingerMs.
+func (t *TrayApp) startNotificationTimer() {
 	if t.hwnd != 0 {
-		winapi.SetTimer(t.hwnd, TimerClearNotification, uint32(durationMs), 0)
+		duration := t.notificationLingerMs
+		if duration <= 0 {
+			duration = 3000
+		}
+		winapi.SetTimer(t.hwnd, TimerClearNotification, uint32(duration), 0)
 	}
 }
 
@@ -347,14 +379,7 @@ func (t *TrayApp) ShowSnapshotCaptureTip(id int) {
 	if t.silent || !t.notification {
 		return
 	}
-	nid := t.notifyIcon
-	nid.UFlags = winapi.NIF_INFO
-	nid.DwInfoFlags = winapi.NIIF_INFO
-	msg := "Window layout snapshot " + snapshotName(id) + " captured..."
-	copy(nid.SzInfo[:], windows.StringToUTF16(msg))
-	copy(nid.SzInfoTitle[:], windows.StringToUTF16("DurableWindows"))
-	winapi.ShellNotifyIcon(winapi.NIM_MODIFY, &nid)
-	t.startNotificationTimer(3000)
+	t.showNotificationBalloon("DurableWindows", "Window layout snapshot "+snapshotName(id)+" captured...")
 }
 
 func (t *TrayApp) ShowSnapshotRestoreTip(id int) {
@@ -362,15 +387,7 @@ func (t *TrayApp) ShowSnapshotRestoreTip(id int) {
 		return
 	}
 	t.iconBusy = true
-	nid := t.notifyIcon
-	nid.UFlags = winapi.NIF_INFO | winapi.NIF_ICON
-	nid.DwInfoFlags = winapi.NIIF_INFO
-	nid.HIcon = t.busyIcon
-	msg := "Window layout snapshot " + snapshotName(id) + " restored..."
-	copy(nid.SzInfo[:], windows.StringToUTF16(msg))
-	copy(nid.SzInfoTitle[:], windows.StringToUTF16("DurableWindows"))
-	winapi.ShellNotifyIcon(winapi.NIM_MODIFY, &nid)
-	t.startNotificationTimer(3000)
+	t.showNotificationBalloon("DurableWindows", "Window layout snapshot "+snapshotName(id)+" restored...")
 }
 
 func (t *TrayApp) EnableRestoreMenu(enableDB bool)       {}

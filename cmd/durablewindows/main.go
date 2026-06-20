@@ -22,31 +22,32 @@ var (
 
 // CLI flags
 var (
-	silent                bool
-	logCategories         string
-	noLogCategories       string
-	delayAutoCapture      float64
-	delayAutoRestore      float64
-	ignoreProcess         string
-	careProcess           string
-	haltRestore           float64
-	fixZorder             int
-	showDesktop           bool
-	offscreenFix          bool
-	enhancedOffscreenFix  bool
-	fixMinimizedRestore   bool
-	restoreSnapshot       int
-	captureSnapshot       int
-	restoreParkedWindows  bool
-	portableMode          bool
-	redirectAppdata       string
-	promptSessionRestore  bool
-	fixZorderSpecified    bool
-	disableNotifications  bool
-	disableFastRestore    bool
-	disableWindowParking  bool
-	windowParkingKeyGrace int
-	redrawDesktop         bool
+	silent                     bool
+	logCategories              string
+	noLogCategories            string
+	delayAutoCapture           float64
+	delayAutoRestore           float64
+	ignoreProcess              string
+	careProcess                string
+	haltRestore                float64
+	fixZorder                  int
+	showDesktop                bool
+	offscreenFix               bool
+	enhancedOffscreenFix       bool
+	fixMinimizedRestore        bool
+	restoreSnapshot            int
+	captureSnapshot            int
+	restoreParkedWindows       bool
+	portableMode               bool
+	redirectAppdata            string
+	promptSessionRestore       bool
+	fixZorderSpecified         bool
+	disableNotifications       bool
+	disableFastRestore         bool
+	disableWindowParking       bool
+	windowParkingKeyGrace      int
+	redrawDesktop              bool
+	notificationLingerDuration int
 )
 
 func main() {
@@ -109,6 +110,7 @@ func main() {
 	trayApp.SetGlobalTrayApp(trayApp)
 	trayApp.SetSilent(silent)
 	trayApp.SetNotification(!disableNotifications)
+	trayApp.SetNotificationLinger(notificationLingerDuration)
 
 	// Run the message pump (blocks until quit)
 	if err := trayApp.Run(); err != nil {
@@ -169,6 +171,7 @@ func parseFlags() {
 	flag.BoolVar(&disableNotifications, "disable_notifications", false, "Disable notification balloons")
 	flag.IntVar(&windowParkingKeyGrace, "window_parking_key_grace", 300, "Grace period (ms) after Shift release for minimize-to-tray")
 	flag.BoolVar(&disableWindowParking, "disable_window_parking", false, "Disable Shift+minimize-to-tray entirely")
+	flag.IntVar(&notificationLingerDuration, "notification_linger_duration", 3000, "How long notification balloons stay visible (ms)")
 
 	flag.Parse()
 
