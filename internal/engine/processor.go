@@ -98,7 +98,7 @@ type featureFlags struct {
 	PromptSessionRestore         bool
 	AutoRestoreLiveWindowsFromDb bool
 	enableDualPosSwitch          bool
-	EnableMinimizeToTray         bool
+	EnableTrayParking            bool
 	resolveHwndCollision         bool
 	rejectScaleFactorChange      bool
 	captureFloatingWindow        bool
@@ -191,15 +191,15 @@ type Processor struct {
 	// Database storage
 	store *storage.Store
 
-	// Minimize-to-tray state.
+	// Tray parking state.
 	// Guarded by mu. All readers and writers must hold the lock.
 	// Internal methods (onMinimizeStart, onWindowShow) already hold mu
-	// via handleWinEvent. Public methods (IsMinimizedToTray,
-	// GetMinimizedToTrayWindows) acquire mu internally.
-	minimizeToTrayWindows map[uintptr]bool
-	parkedIconUID         map[uintptr]uint32 // hwnd → tray icon UID
-	parkedIconRev         map[uint32]uintptr // UID → hwnd
-	nextParkedIconUID     uint32
+	// via handleWinEvent. Public methods (IsTrayParked,
+	// GetTrayParkedWindows) acquire mu internally.
+	trayParkedWindows map[uintptr]bool
+	parkedIconUID     map[uintptr]uint32 // hwnd → tray icon UID
+	parkedIconRev     map[uint32]uintptr // UID → hwnd
+	nextParkedIconUID uint32
 }
 
 // A small wrapper around SendMessage params used internally
@@ -235,18 +235,18 @@ func New() *Processor {
 		},
 
 		// Top-level fields
-		monitorApplications:   make(map[string]map[uintptr][]*models.WindowMetrics),
-		deadApps:              make(map[string]map[uintptr][]*models.WindowMetrics),
-		windowTitle:           make(map[uintptr]string),
-		windowTitleFast:       make(map[uintptr]string),
-		windowProcessName:     make(map[uintptr]string),
-		processCmd:            make(map[uint32]string),
-		dualPosSwitchWindows:  make(map[uintptr]bool),
-		snapshotTakenTime:     make(map[string]map[int]time.Time),
-		minimizeToTrayWindows: make(map[uintptr]bool),
-		parkedIconUID:         make(map[uintptr]uint32),
-		parkedIconRev:         make(map[uint32]uintptr),
-		nextParkedIconUID:     100, // must match FirstParkedIconUID in tray.go
+		monitorApplications:  make(map[string]map[uintptr][]*models.WindowMetrics),
+		deadApps:             make(map[string]map[uintptr][]*models.WindowMetrics),
+		windowTitle:          make(map[uintptr]string),
+		windowTitleFast:      make(map[uintptr]string),
+		windowProcessName:    make(map[uintptr]string),
+		processCmd:           make(map[uint32]string),
+		dualPosSwitchWindows: make(map[uintptr]bool),
+		snapshotTakenTime:    make(map[string]map[int]time.Time),
+		trayParkedWindows:    make(map[uintptr]bool),
+		parkedIconUID:        make(map[uintptr]uint32),
+		parkedIconRev:        make(map[uint32]uintptr),
+		nextParkedIconUID:    100, // must match FirstParkedIconUID in tray.go
 
 		eventCh:     make(chan WindowEvent, 256),
 		quitCh:      make(chan struct{}),
@@ -259,7 +259,7 @@ func New() *Processor {
 			EnableOffScreenFix:           true,
 			FixMinimizedRestore:          true,
 			enableDualPosSwitch:          true,
-			EnableMinimizeToTray:         true,
+			EnableTrayParking:            true,
 			resolveHwndCollision:         true,
 			captureFloatingWindow:        true,
 			rejectScaleFactorChange:      true,
@@ -470,17 +470,17 @@ func (p *Processor) onMinimizeStart(evt WindowEvent) {
 	// hide it underneath — the minimize animation covers the flicker.
 	//
 	// Shift state is tracked by a WH_KEYBOARD_LL hook (installed in
-	// StartMinimizeToTray) so we don't race with the out-of-context
+	// StartTrayParking) so we don't race with the out-of-context
 	// WinEvent dispatch.  A 300 ms grace period after Shift release
 	// handles the case where the user lifts Shift before the callback.
-	if p.EnableMinimizeToTray && evt.HWnd != 0 {
+	if p.EnableTrayParking && evt.HWnd != 0 {
 		if isShiftDownOrRecent() {
 			style := winapi.GetWindowLong(evt.HWnd, winapi.GWL_STYLE)
 			if (style&winapi.WS_MINIMIZEBOX) == 0 || !winapi.IsWindowVisible(evt.HWnd) {
 				return
 			}
 			winapi.ShowWindowAsync(evt.HWnd, winapi.SW_HIDE)
-			p.minimizeToTrayWindows[evt.HWnd] = true
+			p.trayParkedWindows[evt.HWnd] = true
 			p.persistParkedWindows()
 			logger.Parking("shift-minimized to tray", "%s", p.WindowDesc(evt.HWnd))
 			winapi.PostMessage(p.trayHWnd, winapi.WM_APP_PARKED, uintptr(evt.HWnd), 0)
@@ -570,8 +570,8 @@ func (p *Processor) onWindowShow(evt WindowEvent) {
 	// If this window was parked to tray and something else restored it
 	// (native app tray icon, Alt+Tab, etc.), clean up our parked state
 	// so our tray icon doesn't linger.
-	if p.minimizeToTrayWindows[evt.HWnd] {
-		delete(p.minimizeToTrayWindows, evt.HWnd)
+	if p.trayParkedWindows[evt.HWnd] {
+		delete(p.trayParkedWindows, evt.HWnd)
 		p.persistParkedWindows()
 		p.removeParkedTrayIcon(evt.HWnd)
 		logger.Parking("externally restored", "%s — removed parked icon", p.WindowDesc(evt.HWnd))

@@ -114,7 +114,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		startEngine()
 		if t := globalTrayApp; t != nil {
 			logger.Parking("", "Starting minimize-to-tray...")
-			t.processor.StartMinimizeToTray()
+			t.processor.StartTrayParking()
 		}
 		return 0
 	case winapi.WM_APP_PARKED:
@@ -262,7 +262,7 @@ func (t *TrayApp) Run() error {
 	t.processor.RestoreAllParked()
 
 	// Cleanup
-	t.processor.StopMinimizeToTray()
+	t.processor.StopTrayParking()
 	t.removeTrayIcon()
 	winapi.WTSUnRegisterSessionNotification(hwnd)
 	return nil
@@ -461,14 +461,14 @@ func handleTrayMessage(wParam, lParam uintptr) uintptr {
 		if mouseMsg == winapi.WM_LBUTTONUP {
 			if hwnd := t.processor.FindParkedWindowByUID(uid); hwnd != 0 {
 				logger.Parking("parked icon clicked", "uid=%d, restoring window", uid)
-				t.processor.RestoreFromTray(hwnd)
+				t.processor.RestoreParkedWindow(hwnd)
 			}
 		} else if mouseMsg == winapi.WM_RBUTTONUP {
 			// Right-click on parked icon: show a simple "Restore" option.
 			// For now just restore immediately — same as left-click.
 			if hwnd := t.processor.FindParkedWindowByUID(uid); hwnd != 0 {
 				logger.Parking("parked icon right-clicked", "uid=%d, restoring window", uid)
-				t.processor.RestoreFromTray(hwnd)
+				t.processor.RestoreParkedWindow(hwnd)
 			}
 		}
 		return 0

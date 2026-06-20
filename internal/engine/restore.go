@@ -338,8 +338,8 @@ func (p *Processor) RetryDeferredCommands() {
 
 // RestoreAllParked restores windows that were right-click-minimized to tray.
 func (p *Processor) RestoreAllParked() {
-	for _, hwnd := range p.GetMinimizedToTrayWindows() {
-		p.RestoreFromTray(hwnd)
+	for _, hwnd := range p.GetTrayParkedWindows() {
+		p.RestoreParkedWindow(hwnd)
 	}
 }
 

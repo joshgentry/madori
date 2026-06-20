@@ -241,7 +241,7 @@ func applySettings(proc *engine.Processor) {
 	proc.PromptSessionRestore = promptSessionRestore
 	engine.SetShiftGracePeriod(time.Duration(windowParkingKeyGrace) * time.Millisecond)
 	if disableWindowParking {
-		proc.EnableMinimizeToTray = false
+		proc.EnableTrayParking = false
 	}
 	proc.RedrawDesktop = redrawDesktop
 	if disableFastRestore {
