@@ -104,7 +104,7 @@ func snapshotKey(id int) string {
 // RestoreSnapshotCmd is the CLI one-shot: loads only snapshot data from
 // the snap_<id> key (not live auto-capture data), restores windows, and exits.
 func (p *Processor) RestoreSnapshotCmd(id int) {
-	metrics, err := store.LoadWindowMetrics(snapshotKey(id))
+	metrics, err := p.store.LoadWindowMetrics(snapshotKey(id))
 	if err != nil || len(metrics) == 0 {
 		logger.Error("", "Snapshot %d not found", id)
 		return
@@ -128,7 +128,7 @@ func (p *Processor) CaptureSnapshotCmd(id int) {
 	p.CaptureNewDisplayConfig(p.curDisplayKey)
 	p.CaptureWindowsOfInterest(p.curDisplayKey)
 
-	store.SaveWindowMetrics(snapshotKey(id), p.monitorApplications[p.curDisplayKey])
+	p.store.SaveWindowMetrics(snapshotKey(id), p.monitorApplications[p.curDisplayKey])
 	logger.Snapshot("snapshot captured", "snapshot %d (%d windows)", id,
 		len(p.monitorApplications[p.curDisplayKey]))
 }

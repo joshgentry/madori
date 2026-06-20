@@ -16,7 +16,7 @@ type WindowMetrics struct {
 	ProcessExePath string `json:"process_exe_path"`
 
 	// General window info
-	HWnd         uintptr `json:"hwnd"`
+	HWnd         uintptr `json:"-"`
 	WindowID     uint32  `json:"window_id"`
 	ClassName    string  `json:"class_name"`
 	ProcessName  string  `json:"process_name"`

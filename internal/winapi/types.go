@@ -48,16 +48,6 @@ func DefaultWINDOWPLACEMENT() WINDOWPLACEMENT {
 	}
 }
 
-// APP_BAR_DATA represents the Windows APPBARDATA structure.
-type APP_BAR_DATA struct {
-	CbSize           uint32
-	HWnd             uintptr
-	UCallbackMessage int32
-	UEdge            int32
-	RC               RECT
-	LParam           uintptr
-}
-
 // CURSORINFO represents the Windows CURSORINFO structure.
 type CURSORINFO struct {
 	CbSize      uint32

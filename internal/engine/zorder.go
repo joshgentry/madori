@@ -5,17 +5,8 @@ import (
 
 	"durablewindows/internal/logger"
 	"durablewindows/internal/models"
-	"durablewindows/internal/storage"
 	"durablewindows/internal/winapi"
 )
-
-// store is the package-level reference to the BoltDB store, set via SetStore.
-var store *storage.Store
-
-// SetStore sets the storage backend used for disk persistence.
-func SetStore(s *storage.Store) {
-	store = s
-}
 
 // RestoreZorder restores the z-order (window stacking) for all windows on the given display config.
 func (p *Processor) RestoreZorder(displayKey string) {
@@ -73,7 +64,7 @@ func (p *Processor) RestoreZorder(displayKey string) {
 
 // BatchFixTopMostWindows clears topmost flags where needed after restore.
 func (p *Processor) BatchFixTopMostWindows() {
-	for displayKey, apps := range p.monitorApplications {
+	for _, apps := range p.monitorApplications {
 		for hwnd, metricsList := range apps {
 			if len(metricsList) == 0 {
 				continue
@@ -100,7 +91,6 @@ func (p *Processor) BatchFixTopMostWindows() {
 				p.topmostWindowsFixed[hwnd] = true
 			}
 		}
-		_ = displayKey
 	}
 }
 
@@ -127,7 +117,7 @@ func (p *Processor) CaptureZorder(hwnd uintptr, displayKey string) {
 // PersistToDB saves the full engine state (live windows, dead windows, snapshot times)
 // to BoltDB so it survives crashes and reboots.
 func (p *Processor) PersistToDB() {
-	if store == nil {
+	if p.store == nil {
 		return
 	}
 	total := 0
@@ -136,26 +126,26 @@ func (p *Processor) PersistToDB() {
 	}
 	logger.AutoCapture("", "Auto-saving %d windows to database", total)
 	for dk, apps := range p.monitorApplications {
-		store.SaveWindowMetrics("live_"+dk, apps)
-		store.SaveDisplayKeyTimestamp(dk, time.Now())
+		p.store.SaveWindowMetrics("live_"+dk, apps)
+		p.store.SaveDisplayKeyTimestamp(dk, time.Now())
 	}
 	for dk, dead := range p.deadApps {
-		store.SaveWindowMetrics("dead_"+dk, dead)
-		store.SaveDisplayKeyTimestamp(dk, time.Now())
+		p.store.SaveWindowMetrics("dead_"+dk, dead)
+		p.store.SaveDisplayKeyTimestamp(dk, time.Now())
 	}
-	store.SaveSnapshotTimes(p.snapshotTakenTime)
+	p.store.SaveSnapshotTimes(p.snapshotTakenTime)
 }
 
 // LoadFromDB loads the full engine state from BoltDB on startup.
 func (p *Processor) LoadFromDB() {
-	if store == nil {
+	if p.store == nil {
 		return
 	}
-	keys, _ := store.ListDisplayKeys()
+	keys, _ := p.store.ListDisplayKeys()
 	for _, dk := range keys {
 		if len(dk) > 5 && dk[:5] == "live_" {
 			realKey := dk[5:]
-			if metrics, err := store.LoadWindowMetrics(dk); err == nil && metrics != nil {
+			if metrics, err := p.store.LoadWindowMetrics(dk); err == nil && metrics != nil {
 				if p.monitorApplications[realKey] == nil {
 					p.monitorApplications[realKey] = make(map[uintptr][]*models.WindowMetrics)
 				}
@@ -165,13 +155,13 @@ func (p *Processor) LoadFromDB() {
 			}
 		} else if len(dk) > 5 && dk[:5] == "dead_" {
 			realKey := dk[5:]
-			if metrics, err := store.LoadWindowMetrics(dk); err == nil && metrics != nil {
+			if metrics, err := p.store.LoadWindowMetrics(dk); err == nil && metrics != nil {
 				p.deadApps[realKey] = metrics
 			}
 		}
 	}
 	// Load snapshot times
-	if times, err := store.LoadSnapshotTimes(); err == nil && times != nil {
+	if times, err := p.store.LoadSnapshotTimes(); err == nil && times != nil {
 		p.snapshotTakenTime = times
 	}
 	// Prune display-config buckets older than the most-recent N to cap DB growth.
@@ -185,7 +175,7 @@ func (p *Processor) LoadFromDB() {
 	for dk := range p.snapshotTakenTime {
 		snapshotDKs[dk] = true
 	}
-	store.PruneDisplayKeys(25, snapshotDKs)
+	p.store.PruneDisplayKeys(25, snapshotDKs)
 }
 
 // ResetState clears temporary restore state.

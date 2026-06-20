@@ -9,39 +9,39 @@ import (
 	"durablewindows/internal/winapi"
 )
 
-// minimizeToTrayWindows tracks windows that were parked to tray
-// (via Shift+minimize or crash-recovery restore).
-var minimizeToTrayWindows = make(map[uintptr]bool)
+// minimizeToTrayWindows (moved to Processor struct — guarded by p.mu).
 
-// Shift-key tracking for Shift+minimize.  A WH_KEYBOARD_LL hook updates
-// these on every Shift key event so onMinimizeStart can see the state
-// even if the user released Shift before the out-of-context WinEvent fires.
-var (
-	shiftHeld        bool
-	lastShiftUp      time.Time
-	shiftGracePeriod = 300 * time.Millisecond
-	shiftStateMu     sync.Mutex
-	kbHookHandle     uintptr
-	kbHookRunning    bool // guard against duplicate install
-)
+// shiftState tracks the keyboard hook and Shift-key state.
+// It remains a package-level global because keyboardHookProc (a WH_KEYBOARD_LL
+// callback) must be a plain function — it cannot be a method or a closure.
+type shiftState struct {
+	mu            sync.Mutex
+	held          bool
+	lastUp        time.Time
+	gracePeriod   time.Duration
+	kbHookHandle  uintptr
+	kbHookRunning bool
+}
+
+var globalShiftState = shiftState{gracePeriod: 300 * time.Millisecond}
 
 // SetShiftGracePeriod sets how long after Shift is released that a minimize
 // is still treated as Shift+minimize (default 300 ms). Call before StartMinimizeToTray.
 func SetShiftGracePeriod(d time.Duration) {
-	shiftStateMu.Lock()
-	shiftGracePeriod = d
-	shiftStateMu.Unlock()
+	globalShiftState.mu.Lock()
+	globalShiftState.gracePeriod = d
+	globalShiftState.mu.Unlock()
 }
 
 // isShiftDownOrRecent returns true if either Shift key is held right now,
 // or was released within the grace period (WinEvent latency compensation).
 func isShiftDownOrRecent() bool {
-	shiftStateMu.Lock()
-	defer shiftStateMu.Unlock()
-	if shiftHeld {
+	globalShiftState.mu.Lock()
+	defer globalShiftState.mu.Unlock()
+	if globalShiftState.held {
 		return true
 	}
-	return time.Since(lastShiftUp) < shiftGracePeriod
+	return time.Since(globalShiftState.lastUp) < globalShiftState.gracePeriod
 }
 
 // keyboardHookProc is the WH_KEYBOARD_LL callback. It only tracks Shift key
@@ -50,45 +50,40 @@ func keyboardHookProc(nCode, wParam, lParam uintptr) uintptr {
 	if int32(nCode) >= winapi.HC_ACTION {
 		vkCode := (*winapi.KBDLLHOOKSTRUCT)(unsafe.Pointer(lParam)).VkCode
 		if vkCode == winapi.VK_LSHIFT || vkCode == winapi.VK_RSHIFT {
-			shiftStateMu.Lock()
+			globalShiftState.mu.Lock()
 			if wParam == winapi.WM_KEYDOWN || wParam == winapi.WM_SYSKEYDOWN {
-				shiftHeld = true
+				globalShiftState.held = true
 			} else {
-				shiftHeld = false
-				lastShiftUp = time.Now()
+				globalShiftState.held = false
+				globalShiftState.lastUp = time.Now()
 			}
-			shiftStateMu.Unlock()
+			globalShiftState.mu.Unlock()
 		}
 	}
-	return winapi.CallNextHookEx(kbHookHandle, nCode, wParam, lParam)
+	return winapi.CallNextHookEx(globalShiftState.kbHookHandle, nCode, wParam, lParam)
 }
 
-// Tray icon tracking for parked windows.
-var (
-	parkedIconUID            = make(map[uintptr]uint32) // hwnd -> tray icon UID
-	parkedIconRev            = make(map[uint32]uintptr) // UID -> hwnd
-	nextParkedIconUID uint32 = 100                      // must match FirstParkedIconUID in tray.go
-)
+// parkedIconUID, parkedIconRev, nextParkedIconUID (moved to Processor struct).
 
 // persistParkedWindows writes the current set of parked HWNDs to BoltDB so
 // crashed sessions can recover. No-op if the store hasn't been initialised
 // (one-shot CLI commands).
-func persistParkedWindows() {
-	if store == nil {
+func (p *Processor) persistParkedWindows() {
+	if p.store == nil {
 		return
 	}
-	hwnds := make([]uintptr, 0, len(minimizeToTrayWindows))
-	for hwnd := range minimizeToTrayWindows {
+	hwnds := make([]uintptr, 0, len(p.minimizeToTrayWindows))
+	for hwnd := range p.minimizeToTrayWindows {
 		hwnds = append(hwnds, hwnd)
 	}
-	_ = store.SaveParkedWindows(hwnds)
+	_ = p.store.SaveParkedWindows(hwnds)
 }
 
 // parkWindow hides the window and queues tray icon creation.
-func parkWindow(p *Processor, hwnd uintptr) {
+func (p *Processor) parkWindow(hwnd uintptr) {
 	winapi.ShowWindowAsync(hwnd, winapi.SW_HIDE)
-	minimizeToTrayWindows[hwnd] = true
-	persistParkedWindows()
+	p.minimizeToTrayWindows[hwnd] = true
+	p.persistParkedWindows()
 	logger.Parking("minimized to tray", "%s", p.WindowDesc(hwnd))
 	winapi.PostMessage(p.trayHWnd, winapi.WM_APP_PARKED, uintptr(hwnd), 0)
 }
@@ -97,21 +92,21 @@ func parkWindow(p *Processor, hwnd uintptr) {
 // state for Shift+minimize parking. Must be called from a thread with a
 // message pump (the tray app's main thread).
 func (p *Processor) StartMinimizeToTray() {
-	if kbHookRunning {
+	if globalShiftState.kbHookRunning {
 		return
 	}
-	kbHookHandle = winapi.SetWindowsHookExDirect(winapi.WH_KEYBOARD_LL, keyboardHookProc, 0, 0)
-	kbHookRunning = true
-	logger.Parking("shift-minimize-to-tray enabled", "WH_KEYBOARD_LL (handle=%d)", kbHookHandle)
+	globalShiftState.kbHookHandle = winapi.SetWindowsHookExDirect(winapi.WH_KEYBOARD_LL, keyboardHookProc, 0, 0)
+	globalShiftState.kbHookRunning = true
+	logger.Parking("shift-minimize-to-tray enabled", "WH_KEYBOARD_LL (handle=%d)", globalShiftState.kbHookHandle)
 }
 
 // StopMinimizeToTray removes the keyboard hook.
 func (p *Processor) StopMinimizeToTray() {
-	if kbHookHandle != 0 {
-		winapi.UnhookWindowsHookEx(kbHookHandle)
-		kbHookHandle = 0
+	if globalShiftState.kbHookHandle != 0 {
+		winapi.UnhookWindowsHookEx(globalShiftState.kbHookHandle)
+		globalShiftState.kbHookHandle = 0
 	}
-	kbHookRunning = false
+	globalShiftState.kbHookRunning = false
 	logger.Parking("shift-minimize-to-tray disabled", "")
 }
 
@@ -123,10 +118,10 @@ func (p *Processor) SetTrayWindow(hwnd uintptr) {
 
 // AddParkedTrayIcon creates a system-tray icon for a parked window.
 func (p *Processor) AddParkedTrayIcon(hwnd uintptr) {
-	uid := nextParkedIconUID
-	nextParkedIconUID++
-	parkedIconUID[hwnd] = uid
-	parkedIconRev[uid] = hwnd
+	uid := p.nextParkedIconUID
+	p.nextParkedIconUID++
+	p.parkedIconUID[hwnd] = uid
+	p.parkedIconRev[uid] = hwnd
 
 	title := GetWindowTitle(hwnd)
 	if title == "" {
@@ -160,7 +155,7 @@ func (p *Processor) AddParkedTrayIcon(hwnd uintptr) {
 }
 
 func (p *Processor) removeParkedTrayIcon(hwnd uintptr) {
-	uid, ok := parkedIconUID[hwnd]
+	uid, ok := p.parkedIconUID[hwnd]
 	if !ok {
 		return
 	}
@@ -169,18 +164,18 @@ func (p *Processor) removeParkedTrayIcon(hwnd uintptr) {
 		UID:  uid,
 	}
 	winapi.ShellNotifyIcon(winapi.NIM_DELETE, &nid)
-	delete(parkedIconUID, hwnd)
-	delete(parkedIconRev, uid)
+	delete(p.parkedIconUID, hwnd)
+	delete(p.parkedIconRev, uid)
 }
 
 // FindParkedWindowByUID returns the HWND for a parked window given its tray icon UID.
 func (p *Processor) FindParkedWindowByUID(uid uint32) uintptr {
-	return parkedIconRev[uid]
+	return p.parkedIconRev[uid]
 }
 
 // RestoreFromTray restores a window that was parked to tray.
 func (p *Processor) RestoreFromTray(hwnd uintptr) {
-	if !minimizeToTrayWindows[hwnd] {
+	if !p.minimizeToTrayWindows[hwnd] {
 		return
 	}
 
@@ -189,8 +184,8 @@ func (p *Processor) RestoreFromTray(hwnd uintptr) {
 	winapi.ShowWindow(hwnd, winapi.SW_RESTORE)
 	winapi.SetForegroundWindow(hwnd)
 
-	delete(minimizeToTrayWindows, hwnd)
-	persistParkedWindows()
+	delete(p.minimizeToTrayWindows, hwnd)
+	p.persistParkedWindows()
 
 	if metricsList, ok := p.monitorApplications[p.curDisplayKey][hwnd]; ok && len(metricsList) > 0 {
 		p.restoreSingleWindow(hwnd, metricsList[len(metricsList)-1])
@@ -203,10 +198,10 @@ func (p *Processor) RestoreFromTray(hwnd uintptr) {
 // restores any windows that are still alive. This recovers from a crash where
 // RestoreAllParked() never ran. On a clean shutdown the list is empty.
 func (p *Processor) restoreOrphanedParkedWindows() {
-	if store == nil {
+	if p.store == nil {
 		return
 	}
-	hwnds, err := store.LoadParkedWindows()
+	hwnds, err := p.store.LoadParkedWindows()
 	if err != nil || len(hwnds) == 0 {
 		return
 	}
@@ -216,12 +211,12 @@ func (p *Processor) restoreOrphanedParkedWindows() {
 		}
 		// Populate the in-memory map so RestoreFromTray's guard passes.
 		// It will remove the entry and persist the updated list.
-		minimizeToTrayWindows[hwnd] = true
+		p.minimizeToTrayWindows[hwnd] = true
 		logger.Parking("orphaned park restored", "%s (crash recovery)", p.WindowDesc(hwnd))
 		p.RestoreFromTray(hwnd)
 	}
 	// Clear the bucket now that we've restored everything.
-	_ = store.SaveParkedWindows(nil)
+	_ = p.store.SaveParkedWindows(nil)
 }
 
 // RestoreParkedWindowsCmd is the CLI one-shot (-restore_parked_windows):
@@ -233,17 +228,21 @@ func (p *Processor) RestoreParkedWindowsCmd() {
 
 // IsMinimizedToTray returns true if the window was parked to tray.
 func (p *Processor) IsMinimizedToTray(hwnd uintptr) bool {
-	return minimizeToTrayWindows[hwnd]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.minimizeToTrayWindows[hwnd]
 }
 
 // GetMinimizedToTrayWindows returns all windows currently parked to tray.
 func (p *Processor) GetMinimizedToTrayWindows() []uintptr {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	var result []uintptr
-	for hwnd := range minimizeToTrayWindows {
+	for hwnd := range p.minimizeToTrayWindows {
 		if winapi.IsWindow(hwnd) {
 			result = append(result, hwnd)
 		} else {
-			delete(minimizeToTrayWindows, hwnd)
+			delete(p.minimizeToTrayWindows, hwnd)
 		}
 	}
 	return result

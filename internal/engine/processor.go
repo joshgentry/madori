@@ -10,6 +10,7 @@ import (
 
 	"durablewindows/internal/logger"
 	"durablewindows/internal/models"
+	"durablewindows/internal/storage"
 	"durablewindows/internal/winapi"
 )
 
@@ -54,54 +55,25 @@ type Callbacks struct {
 	ChangeIconText            func(text string)
 }
 
-// Processor is the main engine. It mirrors PersistentWindowProcessor in C#.
-type Processor struct {
-	mu sync.Mutex
+// --- Sub-structs ---
+// Embedded in Processor — field promotion means existing code referencing
+// p.FieldName resolves transparently through the embedded struct.
 
-	// In-memory databases
-	monitorApplications map[string]map[uintptr][]*models.WindowMetrics // live windows
-	deadApps            map[string]map[uintptr][]*models.WindowMetrics // killed windows
+type captureState struct {
+	captureTimerStarted  int
+	pendingMoveEvents    []uintptr
+	lastCaptureRect      map[uintptr]winapi.RECT
+	allUserMoveWindows   map[uintptr]bool
+	noRestoreWindows     map[uintptr]bool
+	noRestoreWindowsTmp  map[uintptr]bool
+	lastKillTime         time.Time
+	lastUnminimizeTime   time.Time
+	lastUnminimizeWindow uintptr
+	freezeCapture        bool
+	userMove             bool
+}
 
-	// Configuration
-	AppDataFolder  string
-	persistDbName  string
-	curDisplayKey  string
-	prevDisplayKey string
-
-	// Window tracking
-	windowTitle       map[uintptr]string
-	windowTitleFast   map[uintptr]string
-	windowProcessName map[uintptr]string
-	processCmd        map[uint32]string
-
-	// State flags
-	sessionActive     bool
-	sessionLocked     bool
-	remoteSession     bool
-	PauseAutoRestore  bool
-	restoringFromMem  bool
-	restoringSnapshot bool
-	freezeCapture     bool
-	userMove          bool
-
-	// Foreground tracking
-	foreGroundWindow     uintptr
-	prevForeGroundWindow uintptr
-
-	// Capture state
-	captureTimerStarted   int
-	lastDisplayChangeTime time.Time
-	pendingMoveEvents     []uintptr
-	lastCaptureRect       map[uintptr]winapi.RECT // cached last position for filtering spurious LOCATIONCHANGE events
-	allUserMoveWindows    map[uintptr]bool
-	noRestoreWindows      map[uintptr]bool
-	noRestoreWindowsTmp   map[uintptr]bool
-	normalSessions        map[string]bool
-	lastKillTime          time.Time
-	lastUnminimizeTime    time.Time
-	lastUnminimizeWindow  uintptr
-
-	// Restore state
+type restoreState struct {
 	restoreTimes        int
 	restoredWindows     map[uintptr]bool
 	topmostWindowsFixed map[uintptr]bool
@@ -109,10 +81,13 @@ type Processor struct {
 	slowResponseWindows map[uintptr]bool
 	restoreHalted       bool
 	HaltRestore         int
-	deferredCommands    map[uintptr][]command
+	deferredCommands    map[uintptr][]deferredCommand
 	initCursorPos       winapi.POINT
+	restoringFromMem    bool
+	restoringSnapshot   bool
+}
 
-	// Feature flags
+type featureFlags struct {
 	FastRestore                  bool
 	FixZorder                    int
 	ShowDesktop                  bool
@@ -124,25 +99,72 @@ type Processor struct {
 	AutoRestoreLiveWindowsFromDb bool
 	enableDualPosSwitch          bool
 	EnableMinimizeToTray         bool
-	trayHWnd                     uintptr // tray message window for parked icons
 	resolveHwndCollision         bool
 	rejectScaleFactorChange      bool
 	captureFloatingWindow        bool
+}
 
-	// Process lists
+type processFilter struct {
 	careProcess   map[string]bool
 	ignoreProcess map[string]bool
 	debugProcess  map[string]bool
 	debugWindows  map[uintptr]bool
+}
 
-	// Dual position / special windows
-	dualPosSwitchWindows map[uintptr]bool
-
-	// Timers
+type timerSet struct {
 	foregroundTimer      *time.Timer
 	captureTimer         *time.Timer
 	restoreTimer         *time.Timer
 	restoreFinishedTimer *time.Timer
+}
+
+type sessionState struct {
+	sessionActive         bool
+	sessionLocked         bool
+	remoteSession         bool
+	PauseAutoRestore      bool
+	curDisplayKey         string
+	prevDisplayKey        string
+	lastDisplayChangeTime time.Time
+	normalSessions        map[string]bool
+	curVirtualDesktop     string
+}
+
+// Processor is the main engine. It mirrors PersistentWindowProcessor in C#.
+type Processor struct {
+	mu sync.Mutex
+
+	// Embedded sub-structs — fields promoted transparently.
+	captureState
+	restoreState
+	featureFlags
+	processFilter
+	timerSet
+	sessionState
+
+	// In-memory databases
+	monitorApplications map[string]map[uintptr][]*models.WindowMetrics // live windows
+	deadApps            map[string]map[uintptr][]*models.WindowMetrics // killed windows
+
+	// Configuration
+	AppDataFolder string
+	persistDbName string
+
+	// Window tracking
+	windowTitle       map[uintptr]string
+	windowTitleFast   map[uintptr]string
+	windowProcessName map[uintptr]string
+	processCmd        map[uint32]string
+
+	// Foreground tracking
+	foreGroundWindow     uintptr
+	prevForeGroundWindow uintptr
+
+	// Tray message window for parked icons
+	trayHWnd uintptr
+
+	// Dual position / special windows
+	dualPosSwitchWindows map[uintptr]bool
 
 	// Callbacks to UI
 	callbacks Callbacks
@@ -172,58 +194,93 @@ type Processor struct {
 	iconBusy bool
 
 	// Taskbar state
-	leftButtonClicks  int
-	curVirtualDesktop string
+	leftButtonClicks int
+
+	// Database storage
+	store *storage.Store
+
+	// Minimize-to-tray state.
+	// Guarded by mu. All readers and writers must hold the lock.
+	// Internal methods (onMinimizeStart, onWindowShow) already hold mu
+	// via handleWinEvent. Public methods (IsMinimizedToTray,
+	// GetMinimizedToTrayWindows) acquire mu internally.
+	minimizeToTrayWindows map[uintptr]bool
+	parkedIconUID         map[uintptr]uint32 // hwnd → tray icon UID
+	parkedIconRev         map[uint32]uintptr // UID → hwnd
+	nextParkedIconUID     uint32
 }
 
-type command struct {
-	kind int
-	val  int
+// A small wrapper around SendMessage params used internally
+type deferredCommand struct {
+	msg    uint32
+	wParam uintptr
 }
 
-// NewProcessor creates a new Processor with default settings.
-func NewProcessor() *Processor {
+// New creates a new Processor with default settings.
+func New() *Processor {
 	return &Processor{
-		monitorApplications:  make(map[string]map[uintptr][]*models.WindowMetrics),
-		deadApps:             make(map[string]map[uintptr][]*models.WindowMetrics),
-		windowTitle:          make(map[uintptr]string),
-		windowTitleFast:      make(map[uintptr]string),
-		windowProcessName:    make(map[uintptr]string),
-		processCmd:           make(map[uint32]string),
-		lastCaptureRect:      make(map[uintptr]winapi.RECT),
-		allUserMoveWindows:   make(map[uintptr]bool),
-		noRestoreWindows:     make(map[uintptr]bool),
-		noRestoreWindowsTmp:  make(map[uintptr]bool),
-		normalSessions:       make(map[string]bool),
-		restoredWindows:      make(map[uintptr]bool),
-		topmostWindowsFixed:  make(map[uintptr]bool),
-		unResponsiveWindows:  make(map[uintptr]bool),
-		slowResponseWindows:  make(map[uintptr]bool),
-		deferredCommands:     make(map[uintptr][]command),
-		careProcess:          make(map[string]bool),
-		ignoreProcess:        make(map[string]bool),
-		debugProcess:         make(map[string]bool),
-		debugWindows:         make(map[uintptr]bool),
-		dualPosSwitchWindows: make(map[uintptr]bool),
-		snapshotTakenTime:    make(map[string]map[int]time.Time),
+		// Sub-struct initialization
+		captureState: captureState{
+			lastCaptureRect:     make(map[uintptr]winapi.RECT),
+			allUserMoveWindows:  make(map[uintptr]bool),
+			noRestoreWindows:    make(map[uintptr]bool),
+			noRestoreWindowsTmp: make(map[uintptr]bool),
+		},
+		restoreState: restoreState{
+			restoredWindows:     make(map[uintptr]bool),
+			topmostWindowsFixed: make(map[uintptr]bool),
+			unResponsiveWindows: make(map[uintptr]bool),
+			slowResponseWindows: make(map[uintptr]bool),
+			deferredCommands:    make(map[uintptr][]deferredCommand),
+			HaltRestore:         3000,
+		},
+		processFilter: processFilter{
+			careProcess:   make(map[string]bool),
+			ignoreProcess: make(map[string]bool),
+			debugProcess:  make(map[string]bool),
+			debugWindows:  make(map[uintptr]bool),
+		},
+		sessionState: sessionState{
+			normalSessions: make(map[string]bool),
+		},
+
+		// Top-level fields
+		monitorApplications:   make(map[string]map[uintptr][]*models.WindowMetrics),
+		deadApps:              make(map[string]map[uintptr][]*models.WindowMetrics),
+		windowTitle:           make(map[uintptr]string),
+		windowTitleFast:       make(map[uintptr]string),
+		windowProcessName:     make(map[uintptr]string),
+		processCmd:            make(map[uint32]string),
+		dualPosSwitchWindows:  make(map[uintptr]bool),
+		snapshotTakenTime:     make(map[string]map[int]time.Time),
+		minimizeToTrayWindows: make(map[uintptr]bool),
+		parkedIconUID:         make(map[uintptr]uint32),
+		parkedIconRev:         make(map[uint32]uintptr),
+		nextParkedIconUID:     100, // must match FirstParkedIconUID in tray.go
 
 		eventCh:     make(chan WindowEvent, 256),
 		quitCh:      make(chan struct{}),
 		winEventMgr: winapi.NewWinEventManager(),
 
-		// Default values
-		FastRestore:                  true,
-		FixZorder:                    1,
-		EnableOffScreenFix:           true,
-		FixMinimizedRestore:          true,
-		enableDualPosSwitch:          true,
-		EnableMinimizeToTray:         true,
-		resolveHwndCollision:         true,
-		captureFloatingWindow:        true,
-		rejectScaleFactorChange:      true,
-		AutoRestoreLiveWindowsFromDb: true,
-		HaltRestore:                  3000,
+		// Default values on sub-structs
+		featureFlags: featureFlags{
+			FastRestore:                  true,
+			FixZorder:                    1,
+			EnableOffScreenFix:           true,
+			FixMinimizedRestore:          true,
+			enableDualPosSwitch:          true,
+			EnableMinimizeToTray:         true,
+			resolveHwndCollision:         true,
+			captureFloatingWindow:        true,
+			rejectScaleFactorChange:      true,
+			AutoRestoreLiveWindowsFromDb: true,
+		},
 	}
+}
+
+// SetStore sets the database storage reference.
+func (p *Processor) SetStore(s *storage.Store) {
+	p.store = s
 }
 
 // SetCallbacks sets the UI callback functions.
@@ -433,8 +490,8 @@ func (p *Processor) onMinimizeStart(evt WindowEvent) {
 				return
 			}
 			winapi.ShowWindowAsync(evt.HWnd, winapi.SW_HIDE)
-			minimizeToTrayWindows[evt.HWnd] = true
-			persistParkedWindows()
+			p.minimizeToTrayWindows[evt.HWnd] = true
+			p.persistParkedWindows()
 			logger.Parking("shift-minimized to tray", "%s", p.WindowDesc(evt.HWnd))
 			winapi.PostMessage(p.trayHWnd, winapi.WM_APP_PARKED, uintptr(evt.HWnd), 0)
 		}
@@ -523,9 +580,9 @@ func (p *Processor) onWindowShow(evt WindowEvent) {
 	// If this window was parked to tray and something else restored it
 	// (native app tray icon, Alt+Tab, etc.), clean up our parked state
 	// so our tray icon doesn't linger.
-	if minimizeToTrayWindows[evt.HWnd] {
-		delete(minimizeToTrayWindows, evt.HWnd)
-		persistParkedWindows()
+	if p.minimizeToTrayWindows[evt.HWnd] {
+		delete(p.minimizeToTrayWindows, evt.HWnd)
+		p.persistParkedWindows()
 		p.removeParkedTrayIcon(evt.HWnd)
 		logger.Parking("externally restored", "%s — removed parked icon", p.WindowDesc(evt.HWnd))
 	}

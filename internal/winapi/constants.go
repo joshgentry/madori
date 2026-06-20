@@ -504,83 +504,12 @@ const (
 // IDI constants
 const IDI_APPLICATION = 32512
 
-// Shell_NotifyIcon messages
-const (
-	NIM_ADD        = 0x00000000
-	NIM_MODIFY     = 0x00000001
-	NIM_DELETE     = 0x00000002
-	NIM_SETVERSION = 0x00000004
-)
-
-// NOTIFYICONDATA flags
-const (
-	NIF_MESSAGE = 0x00000001
-	NIF_ICON    = 0x00000002
-	NIF_TIP     = 0x00000004
-	NIF_STATE   = 0x00000008
-	NIF_INFO    = 0x00000010
-	NIF_GUID    = 0x00000020
-)
-
-// NOTIFYICONDATA dwInfoFlags
-const (
-	NIIF_NONE       = 0x00000000
-	NIIF_INFO       = 0x00000001
-	NIIF_WARNING    = 0x00000002
-	NIIF_ERROR      = 0x00000003
-	NIIF_USER       = 0x00000004
-	NIIF_LARGE_ICON = 0x00000020
-)
-
-// NOTIFYICONDATA dwState / dwStateMask
-const (
-	NIS_HIDDEN     = 0x00000001
-	NIS_SHAREDICON = 0x00000002
-)
-
 // Shell_NotifyIcon callback message IDs
 const (
 	WM_TRAYICON     = WM_APP + 1
 	WM_APP_START    = WM_APP + 2
 	WM_APP_PARKED   = WM_APP + 3
 	WM_APP_SHUTDOWN = WM_APP + 4 // graceful Ctrl+C shutdown
-)
-
-// Taskbar messages
-const (
-	ABM_NEW            = 0x00
-	ABM_REMOVE         = 0x01
-	ABM_QUERYPOS       = 0x02
-	ABM_SETPOS         = 0x03
-	ABM_GETSTATE       = 0x04
-	ABM_GETTASKBARPOS  = 0x05
-	ABM_GETAUTOHIDEBAR = 0x07
-	ABM_SETAUTOHIDEBAR = 0x08
-	ABM_SETSTATE       = 0x0A
-)
-
-// Taskbar edges
-const (
-	ABE_LEFT   = 0
-	ABE_TOP    = 1
-	ABE_RIGHT  = 2
-	ABE_BOTTOM = 3
-)
-
-// Taskbar states
-const (
-	ABS_AUTOHIDE    = 0x01
-	ABS_ALWAYSONTOP = 0x02
-)
-
-// Query User Notification State
-const (
-	QUNS_NOT_PRESENT             = 1
-	QUNS_BUSY                    = 2
-	QUNS_RUNNING_D3D_FULL_SCREEN = 3
-	QUNS_PRESENTATION_MODE       = 4
-	QUNS_ACCEPTS_NOTIFICATIONS   = 5
-	QUNS_QUIET_TIME              = 6
 )
 
 // Session change notification codes (wParam for WM_WTSSESSION_CHANGE)

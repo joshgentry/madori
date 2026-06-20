@@ -327,11 +327,11 @@ func (p *Processor) RetryDeferredCommands() {
 		}
 		for _, cmd := range cmds {
 			// Longer timeout for retries
-			winapi.SendMessageTimeout(hwnd, uint32(cmd.kind), uintptr(cmd.val), 0,
+			winapi.SendMessageTimeout(hwnd, cmd.msg, cmd.wParam, 0,
 				winapi.SMTO_ABORTIFHUNG, SyncCommandRetryTimeoutMs)
 		}
 	}
-	p.deferredCommands = make(map[uintptr][]command)
+	p.deferredCommands = make(map[uintptr][]deferredCommand)
 }
 
 // RestoreAllParked restores windows that were right-click-minimized to tray.

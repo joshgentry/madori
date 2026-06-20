@@ -5,6 +5,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"durablewindows/internal/logger"
 )
 
 var (
@@ -101,7 +103,12 @@ func (v *VirtualDesktopManager) callSafely(method uintptr, args ...uintptr) (hr 
 	if !v.enabled || method == 0 {
 		return 1 // non-zero = failure
 	}
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("", "VirtualDesktopManager COM call panicked: %v", r)
+			hr = 1
+		}
+	}()
 	allArgs := append([]uintptr{v.iface}, args...)
 	hr, _, _ = syscall.SyscallN(method, allArgs...)
 	return

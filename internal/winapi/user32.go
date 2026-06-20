@@ -8,10 +8,7 @@ import (
 )
 
 var (
-	modUser32   = windows.NewLazySystemDLL("user32.dll")
-	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
-	modGdi32    = windows.NewLazySystemDLL("gdi32.dll")
-	modShell32  = windows.NewLazySystemDLL("shell32.dll")
+	modUser32 = windows.NewLazySystemDLL("user32.dll")
 
 	// User32 functions
 	procSetWinEventHook                 = modUser32.NewProc("SetWinEventHook")
@@ -96,7 +93,6 @@ var (
 	procSetTimer                        = modUser32.NewProc("SetTimer")
 	procKillTimer                       = modUser32.NewProc("KillTimer")
 	procMessageBoxW                     = modUser32.NewProc("MessageBoxW")
-	procShellNotifyIconW                = modShell32.NewProc("Shell_NotifyIconW")
 	procCreatePopupMenu                 = modUser32.NewProc("CreatePopupMenu")
 	procAppendMenuW                     = modUser32.NewProc("AppendMenuW")
 	procTrackPopupMenu                  = modUser32.NewProc("TrackPopupMenu")
@@ -106,21 +102,6 @@ var (
 	procEnableMenuItem                  = modUser32.NewProc("EnableMenuItem")
 	procGetSystemMetrics                = modUser32.NewProc("GetSystemMetrics")
 	procIsWindowOnCurrentVirtualDesktop = modUser32.NewProc("IsWindowOnCurrentVirtualDesktop")
-
-	// Kernel32 functions
-	procGetModuleHandleW           = modKernel32.NewProc("GetModuleHandleW")
-	procQueryFullProcessImageNameW = modKernel32.NewProc("QueryFullProcessImageNameW")
-	procCloseHandle                = modKernel32.NewProc("CloseHandle")
-	procGetTickCount64             = modKernel32.NewProc("GetTickCount64")
-	procOpenProcess                = modKernel32.NewProc("OpenProcess")
-	procSetConsoleCtrlHandler      = modKernel32.NewProc("SetConsoleCtrlHandler")
-
-	// Gdi32 functions
-	procBitBlt = modGdi32.NewProc("BitBlt")
-
-	// Shell32 functions
-	procSHAppBarMessage              = modShell32.NewProc("SHAppBarMessage")
-	procSHQueryUserNotificationState = modShell32.NewProc("SHQueryUserNotificationState")
 )
 
 // WinEventDelegate is the callback type for SetWinEventHook.
@@ -210,14 +191,14 @@ func GetMonitorInfo(hMonitor uintptr, lpmi *MONITORINFO) bool {
 
 func MonitorFromPoint(pt POINT, dwFlags uint32) uintptr {
 	ret, _, _ := procMonitorFromPoint.Call(
-		uintptr(*(*int64)(unsafe.Pointer(&pt))),
+		uintptr(pt.X)|(uintptr(pt.Y)<<32),
 		uintptr(dwFlags),
 	)
 	return ret
 }
 
 func WindowFromPoint(pt POINT) uintptr {
-	ret, _, _ := procWindowFromPoint.Call(uintptr(*(*int64)(unsafe.Pointer(&pt))))
+	ret, _, _ := procWindowFromPoint.Call(uintptr(pt.X) | (uintptr(pt.Y) << 32))
 	return ret
 }
 
@@ -267,7 +248,7 @@ func IntersectRect(lprcDst *RECT, lprcSrc1 *RECT, lprcSrc2 *RECT) bool {
 }
 
 func PtInRect(lprc *RECT, pt POINT) bool {
-	ret, _, _ := procPtInRect.Call(uintptr(unsafe.Pointer(lprc)), uintptr(*(*int64)(unsafe.Pointer(&pt))))
+	ret, _, _ := procPtInRect.Call(uintptr(unsafe.Pointer(lprc)), uintptr(pt.X)|(uintptr(pt.Y)<<32))
 	return ret != 0
 }
 
@@ -730,31 +711,6 @@ func KillTimer(hWnd uintptr, nIDEvent uintptr) bool {
 	return ret != 0
 }
 
-// NOTIFYICONDATA represents the Windows NOTIFYICONDATAW structure.
-type NOTIFYICONDATA struct {
-	CbSize           uint32
-	HWnd             uintptr
-	UID              uint32
-	UFlags           uint32
-	UCallbackMessage uint32
-	HIcon            uintptr
-	SzTip            [128]uint16
-	DwState          uint32
-	DwStateMask      uint32
-	SzInfo           [256]uint16
-	UVersion         uint32
-	SzInfoTitle      [64]uint16
-	DwInfoFlags      uint32
-	GUIDItem         windows.GUID
-	HBalloonIcon     uintptr
-}
-
-func ShellNotifyIcon(dwMessage uint32, nid *NOTIFYICONDATA) bool {
-	nid.CbSize = uint32(unsafe.Sizeof(NOTIFYICONDATA{}))
-	ret, _, _ := procShellNotifyIconW.Call(uintptr(dwMessage), uintptr(unsafe.Pointer(nid)))
-	return ret != 0
-}
-
 // --- Menu Functions ---
 
 func CreatePopupMenu() uintptr {
@@ -857,110 +813,6 @@ func IsWindowOnCurrentVirtualDesktop(hWnd uintptr) bool {
 	return ret != 0
 }
 
-// --- Kernel32 Functions ---
-
-func GetModuleHandle(lpModuleName *uint16) uintptr {
-	var pName uintptr
-	if lpModuleName != nil {
-		pName = uintptr(unsafe.Pointer(lpModuleName))
-	}
-	ret, _, _ := procGetModuleHandleW.Call(pName)
-	return ret
-}
-
-func QueryFullProcessImageName(hProcess uintptr, dwFlags uint32, lpExeName *[260]uint16, lpdwSize *uint32) bool {
-	ret, _, _ := procQueryFullProcessImageNameW.Call(
-		hProcess,
-		uintptr(dwFlags),
-		uintptr(unsafe.Pointer(lpExeName)),
-		uintptr(unsafe.Pointer(lpdwSize)),
-	)
-	return ret != 0
-}
-
-func CloseHandle(hObject uintptr) bool {
-	ret, _, _ := procCloseHandle.Call(hObject)
-	return ret != 0
-}
-
-func GetTickCount64() uint64 {
-	ret, _, _ := procGetTickCount64.Call()
-	return uint64(ret)
-}
-
-// Process access flags
-const (
-	PROCESS_ALL_ACCESS                = 0x001F0FFF
-	PROCESS_TERMINATE                 = 0x00000001
-	PROCESS_CREATE_THREAD             = 0x00000002
-	PROCESS_VM_OPERATION              = 0x00000008
-	PROCESS_VM_READ                   = 0x00000010
-	PROCESS_VM_WRITE                  = 0x00000020
-	PROCESS_DUP_HANDLE                = 0x00000040
-	PROCESS_CREATE_PROCESS            = 0x00000080
-	PROCESS_SET_QUOTA                 = 0x00000100
-	PROCESS_SET_INFORMATION           = 0x00000200
-	PROCESS_QUERY_INFORMATION         = 0x00000400
-	PROCESS_QUERY_LIMITED_INFORMATION = 0x00001000
-	PROCESS_SYNCHRONIZE               = 0x00100000
-)
-
-func OpenProcess(dwDesiredAccess uint32, bInheritHandle bool, dwProcessId uint32) uintptr {
-	var inherit uintptr
-	if bInheritHandle {
-		inherit = 1
-	}
-	ret, _, _ := procOpenProcess.Call(uintptr(dwDesiredAccess), inherit, uintptr(dwProcessId))
-	return ret
-}
-
-// --- Gdi32 Functions ---
-
-const (
-	SRCCOPY = 0x00CC0020
-)
-
-func BitBlt(hdcDest uintptr, xDest, yDest, cx, cy int32, hdcSrc uintptr, xSrc, ySrc int32, rop uint32) bool {
-	ret, _, _ := procBitBlt.Call(
-		uintptr(hdcDest),
-		uintptr(xDest), uintptr(yDest), uintptr(cx), uintptr(cy),
-		uintptr(hdcSrc),
-		uintptr(xSrc), uintptr(ySrc),
-		uintptr(rop),
-	)
-	return ret != 0
-}
-
-// --- Shell32 Functions ---
-
-func SHAppBarMessage(dwMessage uint32, pData *APP_BAR_DATA) uintptr {
-	ret, _, _ := procSHAppBarMessage.Call(uintptr(dwMessage), uintptr(unsafe.Pointer(pData)))
-	return ret
-}
-
-func SHQueryUserNotificationState(pquns *uint32) int32 {
-	ret, _, _ := procSHQueryUserNotificationState.Call(uintptr(unsafe.Pointer(pquns)))
-	return int32(ret)
-}
-
-// --- WTS Functions (wtsapi32.dll) ---
-
-var (
-	modWtsapi32                          = windows.NewLazySystemDLL("wtsapi32.dll")
-	procWTSRegisterSessionNotification   = modWtsapi32.NewProc("WTSRegisterSessionNotification")
-	procWTSUnRegisterSessionNotification = modWtsapi32.NewProc("WTSUnRegisterSessionNotification")
-)
-
-func WTSRegisterSessionNotification(hWnd uintptr, dwFlags uint32) bool {
-	ret, _, _ := procWTSRegisterSessionNotification.Call(hWnd, uintptr(dwFlags))
-	return ret != 0
-}
-
-func WTSUnRegisterSessionNotification(hWnd uintptr) bool {
-	ret, _, _ := procWTSUnRegisterSessionNotification.Call(hWnd)
-	return ret != 0
-}
-
 // --- Extended User32 Functions ---
 
 var (
@@ -1034,25 +886,8 @@ func MessageBox(hWnd uintptr, text, caption string, uType uint32) int32 {
 // Standard cursor IDs
 const IDC_ARROW = 32512
 
-// --- DWM Functions (dwmapi.dll) ---
-
-var (
-	modDwmapi                 = windows.NewLazySystemDLL("dwmapi.dll")
-	procDwmGetWindowAttribute = modDwmapi.NewProc("DwmGetWindowAttribute")
-)
-
-// DwmGetWindowAttribute retrieves a DWM attribute for a window.
-// Returns false if the call fails.
-func DwmGetWindowAttribute(hwnd uintptr, dwAttribute uint32, pvAttribute unsafe.Pointer, cbAttribute uint32) bool {
-	ret, _, _ := procDwmGetWindowAttribute.Call(hwnd, uintptr(dwAttribute), uintptr(pvAttribute), uintptr(cbAttribute))
-	return ret == 0 // S_OK
-}
-
 // GetDoubleClickTime returns the system double-click time in milliseconds.
 func GetDoubleClickTime() uint32 {
 	ret, _, _ := procGetDoubleClickTime.Call()
 	return uint32(ret)
 }
-
-// DWM window attributes
-const ()

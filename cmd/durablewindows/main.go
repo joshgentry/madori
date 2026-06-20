@@ -90,17 +90,17 @@ func main() {
 		fatal("Failed to open database: %v", err)
 	}
 	defer store.Close()
-	engine.SetStore(store)
 	logger.Event("", "Database opened successfully")
 
+	// Create the core engine
+	proc := engine.New()
+	proc.AppDataFolder = appDataFolder
+	proc.SetStore(store)
+
 	// Handle one-shot CLI commands (no GUI needed)
-	if handleOneShotCommands(appDataFolder) {
+	if handleOneShotCommands(proc) {
 		return
 	}
-
-	// Create the core engine
-	proc := engine.NewProcessor()
-	proc.AppDataFolder = appDataFolder
 
 	// Apply CLI settings to processor
 	applySettings(proc)
@@ -200,10 +200,7 @@ func resolveAppDataFolder() string {
 	return filepath.Join(localAppData, productName)
 }
 
-func handleOneShotCommands(appDataFolder string) bool {
-	proc := engine.NewProcessor()
-	proc.AppDataFolder = appDataFolder
-
+func handleOneShotCommands(proc *engine.Processor) bool {
 	if restoreSnapshot >= 0 {
 		proc.RestoreSnapshotCmd(restoreSnapshot)
 		return true

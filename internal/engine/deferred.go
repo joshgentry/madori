@@ -1,6 +1,9 @@
 package engine
 
-import "durablewindows/internal/winapi"
+import (
+	"durablewindows/internal/winapi"
+	"slices"
+)
 
 // TrySendSyncCommand sends a synchronous message to a window with a timeout.
 // If the window doesn't respond in time, the command is queued for a final
@@ -25,11 +28,9 @@ func (p *Processor) TrySendSyncCommand(hwnd uintptr, msg uint32, wParam uintptr,
 }
 
 func (p *Processor) enqueueDeferredCommand(hwnd uintptr, msg uint32, wParam uintptr) {
-	key := command{kind: int(msg), val: int(wParam)}
-	for _, existing := range p.deferredCommands[hwnd] {
-		if existing == key {
-			return // already queued
-		}
+	key := deferredCommand{msg: msg, wParam: wParam}
+	if slices.Contains(p.deferredCommands[hwnd], key) {
+		return // already queued
 	}
 	p.deferredCommands[hwnd] = append(p.deferredCommands[hwnd], key)
 }
