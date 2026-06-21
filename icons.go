@@ -9,9 +9,6 @@ var (
 	//go:embed resources/pwIcon.ico
 	IdleIcoData []byte
 
-	//go:embed resources/pwIconBusy.png
-	BusyPngData []byte
-
-	//go:embed resources/pwIconUpdate.png
-	UpdatePngData []byte
+	//go:embed resources/pwIconBusy.ico
+	BusyIcoData []byte
 )

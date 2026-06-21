@@ -6,15 +6,11 @@ import (
 )
 
 // loadIcons loads the embedded icon data and returns HICON handles for each state.
-func loadIcons() (idle, busy, update uintptr) {
+func loadIcons() (idle, busy uintptr) {
 	idle = loadICO(madori.IdleIcoData)
-	busy = loadPNGasIcon(madori.BusyPngData)
+	busy = loadICO(madori.BusyIcoData)
 	if busy == 0 {
 		busy = idle
-	}
-	update = loadPNGasIcon(madori.UpdatePngData)
-	if update == 0 {
-		update = idle
 	}
 	return
 }
@@ -75,60 +71,7 @@ func loadICO(data []byte) uintptr {
 	)
 }
 
-// loadPNGasIcon loads a PNG image and converts it to an HICON via GDI+.
-func loadPNGasIcon(data []byte) uintptr {
-	if len(data) == 0 {
-		return 0
-	}
-	return createIconFromPNG(data)
-}
-
-// createIconFromPNG uses GDI+ to decode a PNG and return an HICON.
-func createIconFromPNG(pngData []byte) uintptr {
-	token := winapi.GdiplusStartup()
-	if token == 0 {
-		return createFallbackIcon()
-	}
-	defer winapi.GdiplusShutdown(token)
-
-	stream := winapi.CreateStreamOnHGlobal(0, true)
-	if stream == 0 {
-		return 0
-	}
-	defer winapi.ReleaseStream(stream)
-
-	if !winapi.WriteToStream(stream, pngData) {
-		return 0
-	}
-	winapi.SeekStream(stream, 0, 0)
-
-	bitmap := winapi.GdipCreateBitmapFromStream(stream)
-	if bitmap == 0 {
-		return 0
-	}
-	defer winapi.GdipDisposeImage(bitmap)
-
-	return winapi.GdipCreateHICONFromBitmap(bitmap)
-}
-
 // initIcons loads all icons into the TrayApp.
 func (t *TrayApp) initIcons() {
-	t.idleIcon, t.busyIcon, t.updateIcon = loadIcons()
-}
-
-// createFallbackIcon creates a simple solid-color 32x32 icon without GDI+.
-func createFallbackIcon() uintptr {
-	// 32x32 icon: AND mask (1bpp, 128 bytes) + XOR mask (32bpp, 4096 bytes)
-	andMask := make([]byte, 128)
-	xorMask := make([]byte, 32*32*4)
-
-	// Fill XOR mask with a visible color (orange-ish)
-	for i := 0; i < len(xorMask); i += 4 {
-		xorMask[i] = 0     // Blue
-		xorMask[i+1] = 128 // Green
-		xorMask[i+2] = 255 // Red
-		xorMask[i+3] = 0
-	}
-
-	return winapi.CreateIcon(0, 32, 32, 1, 32, andMask, xorMask)
+	t.idleIcon, t.busyIcon = loadIcons()
 }

@@ -41,7 +41,7 @@ type WindowMetrics struct {
 	IsTopMost           bool `json:"is_top_most"`
 	NeedClearTopMost    bool `json:"need_clear_top_most"`
 	NeedRestoreStacking bool `json:"need_restore_stacking"` // true when StackingRank is valid
-	StackingRank        int  `json:"stacking_rank"` // 0=topmost, -1=unset
+	StackingRank        int  `json:"stacking_rank"`         // 0=topmost, -1=unset
 
 	// DWM corner preference (Windows 11+)
 	// 0=DWMWCP_DEFAULT, 1=DWMWCP_DONOTROUND, 2=DWMWCP_ROUND, 3=DWMWCP_ROUNDSMALL

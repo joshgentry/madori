@@ -41,9 +41,8 @@ type TrayApp struct {
 	clickDownTime time.Time
 
 	// Icons
-	idleIcon   uintptr
-	busyIcon   uintptr
-	updateIcon uintptr
+	idleIcon uintptr
+	busyIcon uintptr
 }
 
 // Window class name
@@ -282,6 +281,7 @@ func (t *TrayApp) addTrayIcon() {
 		UFlags:           winapi.NIF_MESSAGE | winapi.NIF_ICON | winapi.NIF_TIP,
 		UCallbackMessage: winapi.WM_TRAYICON,
 		HIcon:            t.idleIcon,
+		UVersion:         winapi.NOTIFYICON_VERSION_4,
 	}
 	copy(nid.SzTip[:], windows.StringToUTF16("Madori"))
 	winapi.ShellNotifyIcon(winapi.NIM_ADD, &nid)
@@ -370,11 +370,17 @@ func (t *TrayApp) ShowSnapshotCaptureTip(id int) {
 }
 
 func (t *TrayApp) ShowSnapshotRestoreTip(id int) {
-	if t.silent || !t.notification {
+	if t.silent || t.iconBusy {
 		return
 	}
 	t.iconBusy = true
-	t.showNotificationBalloon("Madori", "Window layout snapshot "+engine.SnapshotName(id)+" restored...")
+	nid := t.notifyIcon
+	nid.HIcon = t.busyIcon
+	nid.UFlags = winapi.NIF_ICON
+	winapi.ShellNotifyIcon(winapi.NIM_MODIFY, &nid)
+	if t.notification {
+		t.showNotificationBalloon("Madori", "Window layout snapshot "+engine.SnapshotName(id)+" restored...")
+	}
 }
 
 func (t *TrayApp) EnableRestoreMenu(enableDB bool)       {}

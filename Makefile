@@ -6,27 +6,27 @@ BUILD_DIR = build
 WINRES_JSON = resources/winres.json
 SYSO_OUT = cmd/madori
 GO_WINRES = go tool go-winres
+ICON_FILE = resources/pwIcon.ico
 
 # Default: build Windows .exe with console (useful for debugging)
-build: $(SYSO_OUT)/rsrc_windows_amd64.syso
+build: syso
 	GOOS=windows GOARCH=amd64 go build \
 		-ldflags="-X main.version=$(VERSION)" \
 		-o $(BUILD_DIR)/$(APP_NAME).exe \
 		./cmd/madori/
 
 # Release: build Windows .exe without console window (gui subsystem)
-build-release: $(SYSO_OUT)/rsrc_windows_amd64.syso
+build-release: syso
 	GOOS=windows GOARCH=amd64 go build \
 		-ldflags="-H windowsgui -X main.version=$(VERSION)" \
 		-o $(BUILD_DIR)/$(APP_NAME).exe \
 		./cmd/madori/
 
-# Generate Windows resource .syso files (VERSIONINFO, icons, manifest)
-$(SYSO_OUT)/rsrc_windows_amd64.syso: $(WINRES_JSON)
+# Always regenerate .syso files — removes stale ones first, then runs go-winres.
+# Depends on winres.json and the icon file so any change to either triggers a rebuild.
+syso: $(WINRES_JSON) $(ICON_FILE)
+	@rm -f $(SYSO_OUT)/rsrc_windows_*.syso
 	cd $(SYSO_OUT) && $(GO_WINRES) make --in ../../$(WINRES_JSON)
-
-# Convenience target: generate .syso files without building
-syso: $(SYSO_OUT)/rsrc_windows_amd64.syso
 
 # Clean build artifacts
 clean:

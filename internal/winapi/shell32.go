@@ -53,6 +53,10 @@ const (
 	NIF_GUID    = 0x00000020
 )
 
+// NOTIFYICON_VERSION_4 enables alpha-blended tray icons, GUID items,
+// and balloon icon customization (Windows Vista+).
+const NOTIFYICON_VERSION_4 = 4
+
 const (
 	NIIF_NONE       = 0x00000000
 	NIIF_INFO       = 0x00000001

@@ -1,4 +1,9 @@
 {
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": "pwIcon.ico"
+    }
+  },
   "RT_VERSION": {
     "#1": {
       "0000": {
