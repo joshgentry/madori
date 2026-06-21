@@ -46,8 +46,8 @@ tray menu's Restore submenu.
 | Flag | Default | Description |
 | --- | --- | --- |
 | `-silent` | false | Silent mode (no balloon tips, no console output) |
-| `-log` | (snapshot only) | Log categories: `filtered_events`, `automatic_capture_restore`, `snapshot_capture_restore`, `window_events`, `tray_interaction`, `window_parking`. Comma-separated, e.g. `-log snapshot_capture_restore,tray_interaction` |
-| `-nolog` | (none) | Invert specific categories after `-log`. Applied second, so a category in both ends up disabled. Useful with `-log all`, e.g. `-log all -nolog filtered_events` |
+| `-log` | (snapshot capture & restore) | Log categories: `filtered_events`, `automatic_capture_restore`, `snapshot_capture_restore`, `window_events`, `tray_interaction`, `window_parking`. Comma-separated, e.g. `-log snapshot_capture_restore,tray_interaction`. Use `-log none` to disable all categories |
+| `-log_exclude` | (none) | Invert specific categories after `-log`. Applied second, so a category in both ends up disabled. Useful with `-log all`, e.g. `-log all -log_exclude filtered_events` |
 | `-log_level <level>` | info | Minimum severity: `trace`, `debug`, `info`, `warn`, `error`. Messages below this level are suppressed. Both `-log` categories and `-log_level` must pass for a message to appear. |
 | `-portable_mode` | false | Store data files under `user_data/` within the program folder |
 | `-redirect_appdata <path>` | (AppData) | Override the app data directory. Use `.` for current directory |
@@ -107,6 +107,9 @@ is enabled by default.
 
 **Examples:**
 ```
+# Disable all logging output:
+-log none
+
 # Enable all categories:
 -log all
 
@@ -120,10 +123,10 @@ is enabled by default.
 -log window_events
 
 # Enable everything except the noisy filtered_events:
--log all -nolog filtered_events
+-log all -log_exclude filtered_events
 
 # Enable everything except filtered_events and tray_interaction:
--log all -nolog filtered_events,tray_interaction
+-log all -log_exclude filtered_events,tray_interaction
 ```
 
 ### Files

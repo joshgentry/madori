@@ -25,7 +25,7 @@ var (
 	silent                     bool
 	logLevel                   string
 	logCategories              string
-	noLogCategories            string
+	logExcludeCategories       string
 	delayAutoCapture           float64
 	delayAutoRestore           float64
 	ignoreProcess              string
@@ -78,7 +78,7 @@ func main() {
 	}
 
 	logger.SetCategories(logCategories)
-	logger.DisableCategories(noLogCategories)
+	logger.DisableCategories(logExcludeCategories)
 	logger.Event(logger.LevelInfo, "", "%s %s starting", productName, version)
 
 	// Set process-wide DPI awareness early — before any window is created.
@@ -165,8 +165,8 @@ func setProcessDPIAware() (ok bool) {
 
 func parseFlags() {
 	flag.BoolVar(&silent, "silent", false, "Silent mode (no balloon tips)")
-	flag.StringVar(&logCategories, "log", "", "Log categories: filtered_events,automatic_capture_restore,snapshot_capture_restore,window_events,tray_interaction,window_parking")
-	flag.StringVar(&noLogCategories, "nolog", "", "Invert specific log categories (applied after -log, e.g. \"-log all -nolog filtered_events\")")
+	flag.StringVar(&logCategories, "log", "", "Log categories: none, all, filtered_events,automatic_capture_restore,snapshot_capture_restore,window_events,tray_interaction,window_parking")
+	flag.StringVar(&logExcludeCategories, "log_exclude", "", "Invert specific log categories (applied after -log, e.g. \"-log all -log_exclude filtered_events\")")
 	flag.StringVar(&logLevel, "log_level", "info", "Minimum log level: trace, debug, info, warn, error")
 	flag.Float64Var(&delayAutoCapture, "delay_auto_capture", 0, "Auto capture delay in seconds")
 	flag.Float64Var(&delayAutoRestore, "delay_auto_restore", 0, "Auto restore delay in seconds")

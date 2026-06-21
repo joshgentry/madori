@@ -170,6 +170,10 @@ func SetCategories(csv string) {
 	}
 	for _, name := range strings.Split(csv, ",") {
 		name = strings.TrimSpace(name)
+		if name == "none" {
+			enabledCategories = 0
+			return
+		}
 		if name == "all" {
 			enabledCategories = ^Category(0)
 			return
