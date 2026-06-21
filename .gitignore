@@ -1,10 +1,12 @@
-﻿obj/
-*.suo
-bin/
-lib/
-packages/
-.vs/
+﻿# CLAUDE.md = "@AGENTS.md"
 CLAUDE.md
 .claude/
+
+# Build output
 build/
+
+# Built to cmd/madori/
 *.syso
+
+# Personal TODO notes
+TODO.md
