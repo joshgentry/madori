@@ -274,14 +274,16 @@ func (p *Processor) shouldTrackWindow(hwnd uintptr) bool {
 
 	// If care list is set, only track those processes
 	if len(p.careProcess) > 0 {
-		if !p.careProcess[processName] {
+		if !p.careProcess[normalizeProcessName(processName)] {
 			return false
 		}
 	}
 
 	// Ignore listed processes
-	if p.ignoreProcess[processName] {
-		return false
+	if len(p.ignoreProcess) > 0 {
+		if p.ignoreProcess[normalizeProcessName(processName)] {
+			return false
+		}
 	}
 
 	// Cache process name

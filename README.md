@@ -1,124 +1,199 @@
-# PersistentWindows
-This project addresses a long-standing [issue](https://answers.microsoft.com/en-us/windows/forum/windows_10-hardware/windows-10-multiple-display-windows-are-moved-and/2b9d5a18-45cc-4c50-b16e-fd95dbf27ff3?page=1&auth=1) in Windows 7, 10, and 11, where windows get repositioned after events such as the system waking up, external monitor connections or disconnections, changes in monitor resolution (e.g., exiting full-screen gaming), or during RDP reconnections. The code was forked from [ninjacrab.com/persistent-windows](http://www.ninjacrab.com/persistent-windows/).
+# Madori
 
-## Original Description
-> What is PersistentWindows?
->
-> A poorly named utility that persists window positions and size when the monitor display count/resolution adjusts 
-and restores back to its previous settings.
->
-> For those of you with multi-monitors running on a mixture of DisplayPort and any other connection, you can run 
-this tool and not have to worry about re-arranging when all is back to normal.
+A Windows system-tray utility that remembers window positions and restores them
+when display configurations change — monitor connect/disconnect, sleep/resume,
+resolution changes, RDP connections — any event that alters the desktop geometry.
+
+Madori is a **Go port** of the core engine of
+[PersistentWindows](https://github.com/kangyu-california/PersistentWindows),
+a long-standing C# project that addresses a [known Windows
+issue](https://answers.microsoft.com/en-us/windows/forum/windows_10-hardware/windows-10-multiple-display-windows-are-moved-and/2b9d5a18-45cc-4c50-b16e-fd95dbf27ff3)
+where windows get scrambled after display events. The port drops the GUI
+framework (WPF), the legacy XML persistence format, and the webpage-commander
+feature, while keeping the battle-tested capture/restore engine and adding a
+modern Go-native architecture.
+
+## What's in the name?
+
+The name is a blend of **mado** (窓), meaning "window," and **modori** (戻り),
+meaning "return." It can also be read as **madori** (間取り), meaning "floor
+plan" or "room layout" — a hopefully fitting name for a tool that restores the
+layout of your workspace.
 
 ## Key Features
-- Auto restore: Keeps track of window position changes, and automatically restores the desktop layout, including the taskbar position, to the last matching monitor setup.
-- Supports remote desktop sessions with multiple display configurations.
-- Instantly restore new window to it's last closing position, saving the effort of app developers to maintain window position history.
-- Capture windows to disk: manually saves desktop layout capture to hard drive in liteDB format, so that closed windows can be restored to corresponding virtual desktop after PC reboot.
-- Capture snapshot: manually saves desktop layout to ram. The window Z-order is preserved in the snapshot. Up to 36 snapshots ([0-9a-z]) can be taken for each display configuration.
-- Automatically persists the location history of all windows (alive and closed) to hard drive in xml format, so that manual-restore-point (aka snapshot) and auto-restore-point will continue to function smoothly upon app upgrade/restart, even after PC reboot.
-- Webpage commander to improve the efficiency of web browsing for all major web browsers using one-letter commands like in vi editor.
-- Efficient window switching between foreground and background dual positions.
-- Pause/resume auto restore.
-- Automatic upgrade support.
-- For more Features and Commands, take a look at the [Quick Help page](https://www.github.com/kangyu-california/PersistentWindows/blob/master/Help.md)
+
+- **Automatic restore** — Detects display configuration changes (monitor
+  connect/disconnect, sleep/resume, resolution changes, and RDP
+  connections — all of which alter the desktop geometry) and restores
+  windows to their previous positions for the matching setup.
+- **Manual snapshots** — Save and restore desktop layouts on demand via the
+  tray menu (or single/double-click on the tray icon for snapshot `0`).
+  Up to 37 snapshots (keys `0`–`9`, `a`–`z`, `` ` ``) per display configuration.
+- **Window parking** — Hold **Shift** while minimizing a window to park it in
+  the system tray. Each parked window gets its own tray icon; click to restore.
+- **Z-order preservation** — Optionally restores window stacking order
+  alongside position and size.
+- **Crash recovery** — On startup, restores any windows that were left parked
+  if a previous session ended abnormally.
+- **One-shot CLI commands** — Capture or restore snapshots from the command
+  line for scripting (`-capture_snapshot`, `-restore_snapshot`,
+  `-restore_parked_windows`). These run, do their job, and exit — no tray icon.
+- **Process filtering** — Ignore specific processes or track only an exclusive
+  list of processes.
+- **Portable mode** — Store all data under a `user_data/` directory next to
+  the executable instead of `%LocalAppData%`.
+- **Single-instance lock** — Prevents multiple copies from running
+  simultaneously, with automatic stale-lock detection.
+- **Per-monitor DPI awareness** — Uses physical pixel coordinates on
+  mixed-DPI multi-monitor systems so coordinates don't drift.
+
+## Requirements
+
+- **Windows 7, 10, or 11**
+- **Administrator privileges** are required to manage windows owned by
+  elevated processes (Task Manager, administrative consoles, etc.). Without
+  elevation, those windows are skipped during capture and restore.
 
 ## Installation
-- Download the latest PersistentWindows*.zip file from the [Releases](https://github.com/kangyu-california/PersistentWindows/releases) page
-- Unzip the file into any directory.
-- You can remove the version number from the folder name, because when the program is updated to newer versions, the folder remains the same 
-> Note: the program can be run from any directory, but the program saves its data in 
-> *C:\Users\\[User]\AppData\Local\PersistentWindows*
 
-**For PersistentWindows to be able to restore windows with elevated privileges (for tools like Task Manager or Event Viewer), it needs to be run with Administrator privileges.**
+1. Download the latest `madori.exe` from the
+   [Releases](../../releases)
+   page (Madori is distributed alongside PersistentWindows releases).
+2. Place `madori.exe` in any directory.
+3. Run it — preferably as Administrator.
 
-### To set up PersistentWindows to automatically start at user login:
-This can be done by creating a task in **Task Scheduler**, or by adding a shortcut to the **Startup Folder** (shell:startup).
+### Auto-start at login
 
-Choose **one** of the three methods:
+Use **Task Scheduler** (recommended) or the **Startup Folder**. See the
+[PersistentWindows README](https://github.com/kangyu-california/PersistentWindows#installation)
+for detailed instructions — the same methods work for Madori (substitute
+`madori.exe` for `PersistentWindows.exe`).
 
-**Method 1. Task Scheduler (Windows 10/11)**
-* (Optional) Edit the second line of auto_start_pw_aux.ps1 to customize the command options passed to PersistentWindows.exe, for example you may append the following option to disable advanced features.
-    \+ " -basic_features".
-* Run *auto_start_pw.bat* file (preferably as administrator) to create a task in the Task Scheduler.
-        <img src="https://github.com/kangyu-california/PersistentWindows/assets/59128756/e323086a-8373-4e8a-b439-3c7087550cb0" alt="auto_start_pw as administrator" width="400" />
+## Quick Start
 
-**Method 2. Task Scheduler (Windows 7/10/11)**
-* Create a pw.bat file in the installation folder with following content
+For a thorough walkthrough of the tray interface, command-line options,
+logging, and files — see **[QUICKSTART.md](QUICKSTART.md)**.
+
+### The short version
+
+| Action | Result |
+| --- | --- |
+| Double-click tray icon | Capture snapshot `0` |
+| Single-click tray icon | Restore snapshot `0` |
+| Right-click tray icon | Full context menu |
+| **Shift** + minimize a window | Park it to the tray |
+| Click a parked window's tray icon | Restore that window |
+
+### One-shot (scripting) mode
+
 ```
-  start "" /B "%~dp0PersistentWindows.exe" -splash=0
+madori.exe -capture_snapshot 3      # capture snapshot 3 and exit
+madori.exe -restore_snapshot 3      # restore snapshot 3 and exit
+madori.exe -restore_parked_windows  # restore any orphaned parked windows and exit
 ```
-* Launch a DOS window (cmd.exe) with admin privileges, goto (cd) the PW installation folder, and run the following command
+
+### Common options
+
 ```
-schtasks /create /sc onlogon /tn "StartPersistentWindows" /f /tr "'%~dp0pw.bat'" /rl HIGHEST
-REM Override High DPI Scaling
-REG ADD "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" /v "%~dp0PersistentWindows.exe" /t REG_SZ /d "~ HIGHDPIAWARE" /f
-``` 
-**Method 3. Startup Folder (Windows 7/10/11)**
-* Create a shortcut in the startup folder:
-  * `Win + R`, type `shell:startup`
-  * Create a shortcut to *PersistentWindows.exe* and place it in the Startup folder
-* For Administrator Privileges:
-  * instead of a shortcut, create a .vb file (you can call it *PersistentWindows as Administrator.vb*) and add this to it:
-    ```
-    Set objShell = CreateObject("Shell.Application")
-    objShell.ShellExecute "C:\path\to\PersistentWindows.exe", "", "", "runas", 1
-    ```
-  * replace in the script the path to the *PersistentWindows.exe* file (the location where the PersistentWindows folder was saved)
+madori.exe -portable_mode                    # store data in ./user_data/
+madori.exe -log all -log_level debug         # verbose logging
+madori.exe -ignore_process "teams;slack"     # skip these processes
+madori.exe -disable_window_parking           # turn off Shift+minimize-to-tray
+```
 
-  <br>
+## Architecture
 
-  >  Note: It is possible for set shortcuts to be run as administrator, through the shortcut properties menu. However, this doesn’t work when opening the shortcut through the Startup folder, which is why we use this workaround with the .vb script
+```
+cmd/madori/          Entry point, CLI flag parsing, one-shot commands
+internal/
+  engine/            Core capture/restore engine (event processing, timers,
+                     snapshots, window parking, display-change handling)
+  winapi/            Windows API bindings (user32, kernel32, gdi32, dwmapi,
+                     shell32, virtual-desktop, WinEvents, WTS)
+  tray/              System-tray icon, context menu, notification balloons,
+                     parked-window icons
+  storage/           BoltDB persistence layer (window positions, snapshots,
+                     parked windows, display-key metadata)
+  models/            Shared data types (WindowMetrics)
+  logger/            Category-filtered, level-gated logging
+```
 
-## Uninstall
-  1. run uninstall.bat as admin
-  2. remove the directory containing PersistentWindows.exe
+### How it works
 
-## Usage Instructions
-- Run `PersistentWindows.exe` (preferably as administrator). Note that this app has no main window and its icon is hidden in the System Tray area on the taskbar by default.
-- To have the icon always appear on the taskbar, flip on the PersistentWindows item in the taskbar settings.
+1. On startup, Madori registers **WinEvent hooks** to listen for window
+   creation, destruction, moves, minimizes, and foreground changes.
+2. Events from the hooks are sent to a channel and processed on a single
+   goroutine — the same pattern as the original C# main-thread dispatch.
+3. A **debounced capture timer** fires after a quiet period (default 3 s),
+   enumerating all visible top-level windows and recording their positions,
+   sizes, states, and z-order.
+4. When a display change is detected (via `WM_DISPLAYCHANGE`), a
+   **debounced restore timer** fires and repositions windows to match the
+   last capture for the current monitor configuration.
+5. All state is persisted to **BoltDB** (replacing the original LiteDB) so it
+   survives application restarts and system reboots.
 
-  <img src="showicon.png" alt="taskbar setting" width="400" />
-- Right click the PersistentWindows icon to show the menu, where the capture and restore actions can be selected.
-  ![image](https://github.com/kangyu-california/PersistentWindows/assets/59128756/6a196d75-7d86-4bd3-8873-4a4d65cb3c30)
+### Key differences from PersistentWindows
 
-- To restore the taskbar position, avoid moving mouse when the icon turns red.
-- When software upgrades are available, a notice will show up in the menu.
+| Aspect | PersistentWindows (C#) | Madori (Go) |
+| --- | --- | --- |
+| Database | LiteDB | BoltDB (bbolt) |
+| GUI | WPF window + tray | Tray only (no main window) |
+| Webpage commander | Built-in | Removed |
+| XML persistence | Yes (parallel to LiteDB) | No (BoltDB only) |
+| Logging | Event Log (Event ID 9990/9999) | Category-filtered stderr output |
+| Build | Visual Studio / MSBuild | `go build` (cross-compile from WSL) |
+| Dependencies | .NET Framework 4.7.2+ | Single static binary (~6 MB) |
 
-## Privacy Statement
-- PersistentWindows performs its duty by collecting following information:
-  * window position
-  * window size
-  * window Z-order
-  * window caption text
-  * window class name   
-  * process id and command line of the window
-  * Ctrl, Alt, Shift key strokes when clicking or moving a window
-  * Ctrl, Alt, Shift key strokes when selecting PersistentWindows menu items
-  * key-stroke events when interacting with the PersistentWindows icon on taskbar
-  * key-stroke events (only as webpage command shortcut), mouse click/scroll events and cursor position/shape in web browser when webpage commander window is activated (Alt + W)
-- The history of keyboard/mouse events is typically erased 1 second after received
-- Window information history is kept in ram or on the hard drive in LiteDB file format, waiting to be recalled by auto/manual restore
-- PersistentWindows periodically checks the github repository for software version upgrades. This can be disabled in the options menu.
-  
+## Building from source
+
+```bash
+# Requires Go 1.25+ and cross-compilation for Windows
+
+# Development build (console window visible, useful for log output):
+make build
+
+# Release build (no console window, gui subsystem):
+make build-release
+
+# Run tests (compilation only — execution requires Windows):
+make test
+
+# Clean build artifacts:
+make clean
+```
+
+See the [Makefile](Makefile) for details. Resource files (icon, version info)
+are embedded via `go-winres`.
+
+## Privacy
+
+Madori collects the following information to do its job:
+- Window position, size, and state
+- Window title text and class name
+- Process name, ID, and executable path
+- Window z-order (stacking rank)
+- Keystroke state (**Shift** key) for window-parking interception
+
+Window information is kept in RAM and persisted to a local BoltDB file
+(`%LocalAppData%\Madori\` or `user_data\` in portable mode). Keystroke
+state is ephemeral (tracked via a low-level keyboard hook with a 300 ms
+grace period and never written to disk).
+
+No data is sent over the network. There is no telemetry, no update checking,
+and no analytics.
+
 ## Known Issues
--  If PersistentWindows is not invoked by auto-start task, it may malfunction on fractionally scaled display (such as 125%, 150% etc), it is strongly suggested to override the high DPI scaling property of PersistentWindows.exe to "Application" via Properties->Compatibility->Change high DPI settings dialog from explorer, user needs to capture windows to disk immediately after relaunching PW w/ the new DPI setting.
-![image](https://github.com/kangyu-california/PersistentWindows/assets/59128756/d410aa87-4552-42da-b7a4-e9d7ab1947b1)
-- PersistentWindows can get stuck in a "busy" state (with a red icon in the System Tray) during a restore if one of the windows becomes unresponsive. You may find out the culprit window in Task Manager using "Analyze wait chain". The unresponsive app might need an immediate hot-upgrade, or need to be killed to let PersistentWindows proceed
 
-  <img src="https://user-images.githubusercontent.com/59128756/184041561-5389f540-c61a-4ee7-90ff-f9f725ba3682.png" alt="image" width="500"/>
-  <img src="https://user-images.githubusercontent.com/59128756/187988981-b2564618-2724-4e1e-a718-cd0786a4251e.png" alt="wait chain" width="500"/>
+- During a restore, if a window becomes unresponsive, Madori may appear stuck
+  with a busy icon. Use Task Manager's "Analyze wait chain" to identify the
+  culprit window, then kill or wait for that application to recover.
 
-## Tips To Digest Before Reporting A Bug or Enhancement Request
-- PersistentWindows provides a rich set of command line options for customization, check out [Quick Help page](https://www.github.com/kangyu-california/PersistentWindows/blob/master/Help.md) for a complete list of available options. [how to customize command line options](https://github.com/kangyu-california/PersistentWindows/discussions/313)
-- The window Z-order can be restored in addition to the two-dimentional layout. This feature is enabled for manual snapshot restore only. To turn on Z-order fix for automatic restore, run PersistentWindows with -fix_zorder=1
-- To help me diagnose a bug, please run Event Viewer, locate the "Windows Logs" -> "Application" section, then search for Event ID 9990 and 9999, and copy-paste the content of these events to the new issue report, as shown in the following example
-  <img src="https://user-images.githubusercontent.com/59128756/190280503-a96ce57f-a6f0-4aad-9748-221bbb4f9207.png" alt="image" width="800"/>
-- If there are too many events to report, click "Filter current log" from the Action panel in Event Viewer, choose all 9990 and 9999 events in last hour, then click "Save Filtered Log File As", select "Text (*.txt)" format, and attach the saved events file to the bug report
-  
-  ![image](https://github.com/kangyu-california/PersistentWindows/assets/59128756/ce4ee2e7-8662-4eb5-9a49-cbe53d30f911)
-  
+## License
 
+[GPLv3](LICENSE) — inherited from the original PersistentWindows project.
 
+## Related Projects
 
-
+- [PersistentWindows](https://github.com/kangyu-california/PersistentWindows) —
+  The original C# project from which Madori is derived.

@@ -905,14 +905,20 @@ func (p *Processor) SetCareProcess(names string) {
 	}
 }
 
+// normalizeProcessName returns a lowercased name with any .exe suffix stripped,
+// so user-supplied filter lists and live process names match regardless of
+// case or whether .exe is included on either side.
+func normalizeProcessName(name string) string {
+	n := strings.TrimSpace(name)
+	n = strings.TrimSuffix(name, ".exe")
+	return strings.ToLower(n)
+}
+
 // SetNoinheritProcess adds process names to no-inherit list.
 func parseProcessList(input string) []string {
 	var result []string
 	for _, name := range strings.Split(input, ";") {
-		n := strings.TrimSpace(name)
-		if len(n) > 4 && strings.EqualFold(n[len(n)-4:], ".exe") {
-			n = n[:len(n)-4]
-		}
+		n := normalizeProcessName(name)
 		if n != "" {
 			result = append(result, n)
 		}
