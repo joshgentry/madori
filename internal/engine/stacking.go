@@ -183,8 +183,16 @@ func (p *Processor) LoadFromDB() {
 				if p.monitorApplications[realKey] == nil {
 					p.monitorApplications[realKey] = make(map[uintptr]*models.WindowMetrics)
 				}
+				stale := 0
 				for hwnd, m := range metrics {
-					p.monitorApplications[realKey][hwnd] = m
+					if winapi.IsWindow(hwnd) {
+						p.monitorApplications[realKey][hwnd] = m
+					} else {
+						stale++
+					}
+				}
+				if stale > 0 {
+					logger.AutoCapture(logger.LevelDebug, "", "Skipped %d stale HWNDs loading %s", stale, dk)
 				}
 			}
 		}
